@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -34,6 +34,7 @@ namespace FileLocker
         private CheckBox showPasswordCheckBox;
         private CheckBox compressionCheckBox;
         private CheckBox steganographyCheckBox;
+        private CheckBox scrambleNamesCheckBox;
         private Label instructionLabel;
         private Label passwordLabel;
         private ProgressBar strengthBar;
@@ -58,17 +59,17 @@ namespace FileLocker
             // Main form setup
             this.Text = "FileLocker - AES-256-GCM Encryption Tool";
             this.BackColor = lightBg;
-            this.ClientSize = new Size(550, 700);
+            this.ClientSize = new Size(600, 800);  // Increased form size
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
 
             // Create main container panel for perfect centering
             Panel mainPanel = new Panel
             {
-                Size = new Size(500, 650),
+                Size = new Size(550, 750),  // Increased panel size
                 Location = new Point(
-                    (this.ClientSize.Width - 500) / 2,
-                    (this.ClientSize.Height - 650) / 2
+                    (this.ClientSize.Width - 550) / 2,
+                    (this.ClientSize.Height - 750) / 2
                 ),
                 Anchor = AnchorStyles.None
             };
@@ -77,8 +78,8 @@ namespace FileLocker
             instructionLabel = new Label
             {
                 Text = "Drag & drop files/folders or click to select",
-                Size = new Size(480, 25),
-                Location = new Point((mainPanel.Width - 480) / 2, 20),
+                Size = new Size(530, 25),
+                Location = new Point((mainPanel.Width - 530) / 2, 20),
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold)
             };
@@ -86,11 +87,11 @@ namespace FileLocker
             // CENTERED Drop panel
             dropPanel = new Panel
             {
-                Size = new Size(480, 100),
-                Location = new Point((mainPanel.Width - 480) / 2, 50),
+                Size = new Size(530, 120),  // Increased height
+                Location = new Point((mainPanel.Width - 530) / 2, 50),
                 BackColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle,
-                AllowDrop = true // Enable drag-drop
+                AllowDrop = true
             };
 
             dropLabel = new Label
@@ -105,18 +106,18 @@ namespace FileLocker
             // CENTERED File list
             fileListBox = new ListBox
             {
-                Size = new Size(480, 150),
-                Location = new Point((mainPanel.Width - 480) / 2, 160)
+                Size = new Size(530, 180),  // Increased height
+                Location = new Point((mainPanel.Width - 530) / 2, 180)
             };
 
             // CENTERED Clear button (aligned to list box)
             clearListButton = new Button
             {
                 Text = "Clear All",
-                Size = new Size(80, 28),
+                Size = new Size(100, 30),  // Increased size
                 Location = new Point(
-                    (mainPanel.Width - 480) / 2 + 480 - 80,  // Right-align to list box
-                    320
+                    (mainPanel.Width - 530) / 2 + 530 - 100,  // Right-align to list box
+                    370
                 )
             };
 
@@ -124,30 +125,30 @@ namespace FileLocker
             passwordLabel = new Label
             {
                 Text = "Encryption Password:",
-                Size = new Size(480, 20),
-                Location = new Point((mainPanel.Width - 480) / 2, 350),
+                Size = new Size(530, 20),
+                Location = new Point((mainPanel.Width - 530) / 2, 410),
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
             // Password box group - CENTERED
             Panel passwordPanel = new Panel
             {
-                Size = new Size(480, 30),
-                Location = new Point((mainPanel.Width - 480) / 2, 375)
+                Size = new Size(530, 35),  // Increased height
+                Location = new Point((mainPanel.Width - 530) / 2, 435)
             };
 
             passwordTextBox = new TextBox
             {
-                Size = new Size(380, 25),
+                Size = new Size(400, 30),  // Increased size
                 Location = new Point(0, 0),
-                UseSystemPasswordChar = true // FIX: Start with password hidden
+                UseSystemPasswordChar = true
             };
 
             showPasswordCheckBox = new CheckBox
             {
                 Text = "Show Password",
-                Size = new Size(100, 25),
-                Location = new Point(380, 0)
+                Size = new Size(120, 30),  // Increased size
+                Location = new Point(410, 0)
             };
             passwordPanel.Controls.AddRange(new Control[] { passwordTextBox, showPasswordCheckBox });
 
@@ -155,79 +156,90 @@ namespace FileLocker
             strengthLabel = new Label
             {
                 Text = "Password Strength:",
-                Size = new Size(480, 20),
-                Location = new Point((mainPanel.Width - 480) / 2, 410),
+                Size = new Size(530, 20),
+                Location = new Point((mainPanel.Width - 530) / 2, 480),
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
             strengthBar = new ProgressBar
             {
-                Size = new Size(480, 12),
-                Location = new Point((mainPanel.Width - 480) / 2, 430)
+                Size = new Size(530, 15),  // Increased height
+                Location = new Point((mainPanel.Width - 530) / 2, 505)
             };
 
             // CENTERED Options panel
             Panel optionsPanel = new Panel
             {
-                Size = new Size(480, 30),
-                Location = new Point((mainPanel.Width - 480) / 2, 450)
+                Size = new Size(530, 80),  // Increased height
+                Location = new Point((mainPanel.Width - 530) / 2, 530)
             };
 
             compressionCheckBox = new CheckBox
             {
                 Text = "Compress Files",
-                Size = new Size(150, 25),
+                Size = new Size(160, 30),  // Increased size
                 Location = new Point(0, 0)
             };
 
             steganographyCheckBox = new CheckBox
             {
                 Text = "Steganography Mode",
-                Size = new Size(180, 25),
-                Location = new Point(160, 0)
+                Size = new Size(180, 30),  // Increased size
+                Location = new Point(170, 0)
             };
-            optionsPanel.Controls.AddRange(new Control[] { compressionCheckBox, steganographyCheckBox });
+
+            scrambleNamesCheckBox = new CheckBox
+            {
+                Text = "Scramble File Names",
+                Size = new Size(160, 30),  // Increased size
+                Location = new Point(0, 40)
+            };
+
+            optionsPanel.Controls.AddRange(new Control[] { compressionCheckBox, steganographyCheckBox, scrambleNamesCheckBox });
 
             // CENTERED Buttons (grouped)
             Panel buttonPanel = new Panel
             {
-                Size = new Size(300, 45),
-                Location = new Point((mainPanel.Width - 300) / 2, 490)
+                Size = new Size(350, 50),  // Increased size
+                Location = new Point((mainPanel.Width - 350) / 2, 620)
             };
 
             encryptButton = new Button
             {
                 Text = "🔒 ENCRYPT",
-                Size = new Size(140, 40),
+                Size = new Size(160, 45),  // Increased size
                 Location = new Point(0, 0),
                 BackColor = successColor,
-                ForeColor = Color.White
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold)  // Added bold font
             };
 
             decryptButton = new Button
             {
                 Text = "🔓 DECRYPT",
-                Size = new Size(140, 40),
-                Location = new Point(160, 0),
+                Size = new Size(160, 45),  // Increased size
+                Location = new Point(190, 0),
                 BackColor = primaryColor,
-                ForeColor = Color.White
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold)  // Added bold font
             };
             buttonPanel.Controls.AddRange(new Control[] { encryptButton, decryptButton });
 
             // CENTERED Progress bar
             progressBar = new ProgressBar
             {
-                Size = new Size(480, 20),
-                Location = new Point((mainPanel.Width - 480) / 2, 550)
+                Size = new Size(530, 25),  // Increased size
+                Location = new Point((mainPanel.Width - 530) / 2, 680)
             };
 
             // CENTERED Status label
             statusLabel = new Label
             {
                 Text = "Ready - Add files to begin",
-                Size = new Size(480, 25),
-                Location = new Point((mainPanel.Width - 480) / 2, 580),
-                TextAlign = ContentAlignment.MiddleCenter
+                Size = new Size(530, 25),
+                Location = new Point((mainPanel.Width - 530) / 2, 710),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Segoe UI", 9F)  // Added font
             };
 
             // Add all controls to main panel
@@ -608,8 +620,17 @@ namespace FileLocker
                 aes.Encrypt(iv, combined, ciphertext, tag);
             }
 
-            // Generate obfuscated filename
-            string encryptedPath = GenerateObfuscatedFilename(filePath);
+            // Generate output filename based on scramble setting
+            string encryptedPath;
+            if (scrambleNamesCheckBox.Checked)
+            {
+                encryptedPath = GenerateObfuscatedFilename(filePath);
+            }
+            else
+            {
+                string directory = Path.GetDirectoryName(filePath);
+                encryptedPath = Path.Combine(directory, originalFileName + ENCRYPTED_EXTENSION);
+            }
 
             // Write encrypted file: version(1) + salt(32) + iv(12) + tag(16) + ciphertext
             using (var fs = new FileStream(encryptedPath, FileMode.Create))
@@ -867,6 +888,7 @@ namespace FileLocker
             clearListButton.Enabled = enabled;
             compressionCheckBox.Enabled = enabled;
             steganographyCheckBox.Enabled = enabled;
+            scrambleNamesCheckBox.Enabled = enabled;
             dropPanel.AllowDrop = enabled;
         }
 
