@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Linq;
+using System.Reflection;
 
 namespace FileLocker
 {
@@ -40,13 +41,23 @@ namespace FileLocker
         private ProgressBar strengthBar;
         private Label strengthLabel;
         private List<string> selectedPaths = new List<string>();
+        private Updater updater;
+        private MenuStrip menuStrip;
 
         public MainForm()
         {
             InitializeComponent();
             SetupDragDrop();
             SetupPasswordStrengthCheck();
-            SetupEventHandlers(); // Add missing event handlers
+            SetupEventHandlers();
+            SetupUpdater();
+        }
+
+        private void SetupUpdater()
+        {
+            updater = new Updater();
+            // Check for updates silently on startup
+            _ = updater.CheckForUpdatesAsync(true);
         }
 
         private void InitializeComponent()
@@ -59,17 +70,50 @@ namespace FileLocker
             // Main form setup
             this.Text = "FileLocker - AES-256-GCM Encryption Tool";
             this.BackColor = lightBg;
-            this.ClientSize = new Size(600, 800);  // Increased form size
+            this.ClientSize = new Size(600, 800);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
+
+            // Add menu strip
+            menuStrip = new MenuStrip
+            {
+                BackColor = lightBg,
+                RenderMode = ToolStripRenderMode.System
+            };
+
+            var fileMenu = new ToolStripMenuItem("File");
+            var helpMenu = new ToolStripMenuItem("Help");
+
+            var checkUpdatesItem = new ToolStripMenuItem("Check for Updates", null, async (s, e) =>
+            {
+                await updater.CheckForUpdatesAsync();
+            });
+
+            var aboutItem = new ToolStripMenuItem("About", null, (s, e) =>
+            {
+                MessageBox.Show(
+                    $"FileLocker v{Assembly.GetExecutingAssembly().GetName().Version}\n\n" +
+                    "A secure file encryption tool using AES-256-GCM encryption.\n\n" +
+                    "© 2024 Your Name",
+                    "About FileLocker",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
+            });
+
+            helpMenu.DropDownItems.AddRange(new ToolStripItem[] { checkUpdatesItem, aboutItem });
+            menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, helpMenu });
+
+            this.MainMenuStrip = menuStrip;
+            this.Controls.Add(menuStrip);
 
             // Create main container panel for perfect centering
             Panel mainPanel = new Panel
             {
-                Size = new Size(550, 750),  // Increased panel size
+                Size = new Size(550, 750),
                 Location = new Point(
                     (this.ClientSize.Width - 550) / 2,
-                    (this.ClientSize.Height - 750) / 2
+                    menuStrip.Height + (this.ClientSize.Height - menuStrip.Height - 750) / 2
                 ),
                 Anchor = AnchorStyles.None
             };
