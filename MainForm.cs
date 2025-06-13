@@ -94,7 +94,7 @@ namespace FileLocker
                 MessageBox.Show(
                     $"FileLocker v{Assembly.GetExecutingAssembly().GetName().Version}\n\n" +
                     "A secure file encryption tool using AES-256-GCM encryption.\n\n" +
-                    "© 2024 Your Name",
+                    "© 2025 Jeremy Hayes",
                     "About FileLocker",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
@@ -953,4 +953,3 @@ namespace FileLocker
         }
     }
 }
-
