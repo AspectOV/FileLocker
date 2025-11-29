@@ -1,5 +1,3 @@
-using Microsoft.UI.Xaml;           // XamlRoot, Application
-using Microsoft.UI.Xaml.Controls;  // ContentDialog
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,6 +7,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Windows;
 
 
 namespace FileLocker
@@ -18,7 +17,6 @@ namespace FileLocker
         private const string GITHUB_API_URL = "https://api.github.com/repos/AspectOV/FileLocker/releases/latest";
         private readonly HttpClient httpClient;
         private readonly Version currentVersion;
-        private XamlRoot? xamlRoot;
 
         private GitHubRelease? latestRelease;
 
@@ -30,11 +28,6 @@ namespace FileLocker
             httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
             httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
             currentVersion = GetCurrentVersion();
-        }
-
-        public void SetXamlRoot(XamlRoot root)
-        {
-            xamlRoot = root;
         }
 
         public async Task CheckForUpdatesAsync(bool silent = false)
@@ -87,51 +80,27 @@ namespace FileLocker
 
         // Example fix for all relevant methods:
 
-        private async Task<bool> ShowUpdateDialogAsync(Version latestVersion)
+        private Task<bool> ShowUpdateDialogAsync(Version latestVersion)
         {
-            if (xamlRoot is null) return false;
+            var result = MessageBox.Show(
+                $"A new version ({latestVersion}) is available. Current version: {currentVersion}\n\nWould you like to download it now?",
+                "Update Available",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
 
-            var dialog = new ContentDialog
-            {
-                Title = "Update Available",
-                Content = $"A new version ({latestVersion}) is available. Current version: {currentVersion}\n\nWould you like to download it now?",
-                PrimaryButtonText = "Yes",
-                SecondaryButtonText = "No",
-                XamlRoot = xamlRoot
-            };
-
-            var result = await dialog.ShowAsync();
-            return result == ContentDialogResult.Primary;
+            return Task.FromResult(result == MessageBoxResult.Yes);
         }
 
-        private async Task ShowNoUpdateDialogAsync()
+        private Task ShowNoUpdateDialogAsync()
         {
-            if (xamlRoot is null) return;
-
-            var dialog = new ContentDialog
-            {
-                Title = "No Updates Available",
-                Content = "You are running the latest version.",
-                PrimaryButtonText = "OK",
-                XamlRoot = xamlRoot
-            };
-
-            await dialog.ShowAsync();
+            MessageBox.Show("You are running the latest version.", "No Updates Available", MessageBoxButton.OK, MessageBoxImage.Information);
+            return Task.CompletedTask;
         }
 
-        private async Task ShowErrorDialogAsync(string message)
+        private Task ShowErrorDialogAsync(string message)
         {
-            if (xamlRoot is null) return;
-
-            var dialog = new ContentDialog
-            {
-                Title = "Update Error",
-                Content = message,
-                PrimaryButtonText = "OK",
-                XamlRoot = xamlRoot
-            };
-
-            await dialog.ShowAsync();
+            MessageBox.Show(message, "Update Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            return Task.CompletedTask;
         }
 
         private bool IsNewVersionAvailable(Version latestVersion)
