@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System.Text.Json.Serialization;
 
 namespace FileLocker
 {
@@ -17,11 +18,15 @@ namespace FileLocker
         private readonly HttpClient httpClient;
         private readonly string currentVersion;
         private XamlRoot? xamlRoot;
+        private GitHubRelease? latestRelease;
 
         public Updater()
         {
             httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(15);
             httpClient.DefaultRequestHeaders.Add("User-Agent", "FileLocker-Updater");
+            httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+            httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
             // Get version from the assembly, which is set in FileLocker.csproj
             currentVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.2";
         }
@@ -35,12 +40,18 @@ namespace FileLocker
         {
             try
             {
-                var latestVersion = await GetLatestVersionAsync();
+                latestRelease = await FetchLatestReleaseAsync(!silent);
+                if (latestRelease == null)
+                {
+                    return;
+                }
+
+                var latestVersion = ParseVersion(latestRelease.TagName);
                 if (latestVersion == null)
                 {
                     if (!silent)
                     {
-                        await ShowErrorDialogAsync("Could not check for updates. Please check your internet connection and try again.");
+                        await ShowErrorDialogAsync("Unable to read version information from the latest release.");
                     }
                     return;
                 }
@@ -70,7 +81,7 @@ namespace FileLocker
             }
         }
 
-        private async Task<bool> ShowUpdateDialogAsync(string latestVersion)
+        private async Task<bool> ShowUpdateDialogAsync(Version latestVersion)
         {
             if (xamlRoot == null) return false;
 
@@ -117,39 +128,24 @@ namespace FileLocker
             await dialog.ShowAsync();
         }
 
-        private async Task<string?> GetLatestVersionAsync()
+        private bool IsNewVersionAvailable(Version latestVersion)
         {
-            try
-            {
-                var response = await httpClient.GetStringAsync(GITHUB_API_URL);
-                var releaseInfo = JsonSerializer.Deserialize<GitHubRelease>(response, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-                return releaseInfo?.TagName?.TrimStart('v') ?? null;
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync($"Update check failed: {ex.Message}");
-                return null;
-            }
-        }
+            if (!Version.TryParse(currentVersion, out var current)) return false;
 
-        private bool IsNewVersionAvailable(string latestVersion)
-        {
-            if (string.IsNullOrEmpty(latestVersion)) return false;
-
-            var current = Version.Parse(currentVersion);
-            var latest = Version.Parse(latestVersion);
-
-            return latest > current;
+            return latestVersion > current;
         }
 
         private async Task DownloadAndInstallUpdateAsync()
         {
             try
             {
-                var downloadUrl = await GetDownloadUrlAsync();
+                if (latestRelease == null)
+                {
+                    await ShowErrorDialogAsync("The updater has no release details to download. Please check again.");
+                    return;
+                }
+
+                var downloadUrl = GetDownloadUrl(latestRelease);
                 if (string.IsNullOrEmpty(downloadUrl))
                 {
                     await ShowErrorDialogAsync("Could not find update installer download URL.");
@@ -184,24 +180,64 @@ namespace FileLocker
             }
         }
 
-        private async Task<string?> GetDownloadUrlAsync()
+        private async Task<GitHubRelease?> FetchLatestReleaseAsync(bool showErrors)
         {
             try
             {
-                var response = await httpClient.GetStringAsync(GITHUB_API_URL);
-                var releaseInfo = JsonSerializer.Deserialize<GitHubRelease>(response, new JsonSerializerOptions
+                using var request = new HttpRequestMessage(HttpMethod.Get, GITHUB_API_URL);
+                using var response = await httpClient.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"GitHub API returned status {response.StatusCode}");
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    throw new InvalidOperationException("GitHub returned an empty response.");
+                }
+
+                return JsonSerializer.Deserialize<GitHubRelease>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
-
-                // Ensure null safety by checking if Assets is null before accessing it
-                var installerAsset = releaseInfo?.Assets?.FirstOrDefault(static a => a.Name?.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true);
-                return installerAsset?.BrowserDownloadUrl;
             }
-            catch
+            catch (Exception ex)
             {
+                if (showErrors)
+                {
+                    await ShowErrorDialogAsync($"Update check failed: {ex.Message}");
+                }
                 return null;
             }
+        }
+
+        private static string? GetDownloadUrl(GitHubRelease release)
+        {
+            var installerAsset = release.Assets?
+                .OrderByDescending(static a => GetInstallerPriority(a.Name))
+                .FirstOrDefault();
+
+            return installerAsset?.BrowserDownloadUrl;
+        }
+
+        private static int GetInstallerPriority(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return int.MinValue;
+
+            if (name.EndsWith(".msix", StringComparison.OrdinalIgnoreCase)) return 3;
+            if (name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase)) return 2;
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return 1;
+            return 0;
+        }
+
+        private static Version? ParseVersion(string? tagName)
+        {
+            if (string.IsNullOrWhiteSpace(tagName)) return null;
+
+            var sanitized = tagName.Trim().TrimStart('v', 'V');
+            return Version.TryParse(sanitized, out var version) ? version : null;
         }
 
         private bool VerifyFile(string filePath)
@@ -220,18 +256,32 @@ namespace FileLocker
 
         private class GitHubRelease
         {
+            [JsonPropertyName("tag_name")]
             public string? TagName { get; set; }
+
+            [JsonPropertyName("assets")]
             public Asset[]? Assets { get; set; }
+
+            [JsonPropertyName("name")]
             public string? Name { get; set; }
+
+            [JsonPropertyName("body")]
             public string? Body { get; set; }
+
+            [JsonPropertyName("prerelease")]
             public bool Prerelease { get; set; }
+
+            [JsonPropertyName("published_at")]
             public DateTime PublishedAt { get; set; }
         }
 
         private class Asset
         {
+            [JsonPropertyName("name")]
             public string? Name { get; set; }
+
+            [JsonPropertyName("browser_download_url")]
             public string? BrowserDownloadUrl { get; set; }
         }
     }
-} 
+}
