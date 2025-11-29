@@ -465,9 +465,7 @@ namespace FileLocker
                     }
                     catch (CryptographicException)
                     {
-                        // Remove or comment out the following line, as System.IO.Hashing does not exist in .NET Standard/.NET Framework
-                        // using System.IO.Hashing;
-                        //throw new UnauthorizedAccessException("Invalid password or corrupted file.");
+                        throw new UnauthorizedAccessException("Invalid password or corrupted file.");
                     }
                 }
 
