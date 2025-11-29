@@ -6,7 +6,8 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using System.Linq;
-using System.Windows;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 
 namespace FileLocker
 {
@@ -15,13 +16,19 @@ namespace FileLocker
         private const string GITHUB_API_URL = "https://api.github.com/repos/AspectOV/FileLocker/releases/latest";
         private readonly HttpClient httpClient;
         private readonly string currentVersion;
+        private XamlRoot? xamlRoot;
 
         public Updater()
         {
             httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Add("User-Agent", "FileLocker-Updater");
             // Get version from the assembly, which is set in FileLocker.csproj
-            currentVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0.4";
+            currentVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.2";
+        }
+
+        public void SetXamlRoot(XamlRoot root)
+        {
+            xamlRoot = root;
         }
 
         public async Task CheckForUpdatesAsync(bool silent = false)
@@ -29,20 +36,21 @@ namespace FileLocker
             try
             {
                 var latestVersion = await GetLatestVersionAsync();
-                if (latestVersion == null) return;
+                if (latestVersion == null)
+                {
+                    if (!silent)
+                    {
+                        await ShowErrorDialogAsync("Could not check for updates. Please check your internet connection and try again.");
+                    }
+                    return;
+                }
 
                 if (IsNewVersionAvailable(latestVersion))
                 {
                     if (!silent)
                     {
-                        var result = MessageBox.Show(
-                            $"A new version ({latestVersion}) is available. Current version: {currentVersion}\n\nWould you like to download it now?",
-                            "Update Available",
-                            MessageBoxButton.YesNo,
-                            MessageBoxImage.Information
-                        );
-
-                        if (result == MessageBoxResult.Yes)
+                        var result = await ShowUpdateDialogAsync(latestVersion);
+                        if (result)
                         {
                             await DownloadAndInstallUpdateAsync();
                         }
@@ -50,29 +58,66 @@ namespace FileLocker
                 }
                 else if (!silent)
                 {
-                    MessageBox.Show(
-                        "You are running the latest version.",
-                        "No Updates Available",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information
-                    );
+                    await ShowNoUpdateDialogAsync();
                 }
             }
             catch (Exception ex)
             {
                 if (!silent)
                 {
-                    MessageBox.Show(
-                        $"Error checking for updates: {ex.Message}",
-                        "Update Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error
-                    );
+                    await ShowErrorDialogAsync($"Error checking for updates: {ex.Message}");
                 }
             }
         }
 
-        private async Task<string> GetLatestVersionAsync()
+        private async Task<bool> ShowUpdateDialogAsync(string latestVersion)
+        {
+            if (xamlRoot == null) return false;
+
+            var dialog = new ContentDialog
+            {
+                Title = "Update Available",
+                Content = $"A new version ({latestVersion}) is available. Current version: {currentVersion}\n\nWould you like to download it now?",
+                PrimaryButtonText = "Yes",
+                SecondaryButtonText = "No",
+                XamlRoot = xamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            return result == ContentDialogResult.Primary;
+        }
+
+        private async Task ShowNoUpdateDialogAsync()
+        {
+            if (xamlRoot == null) return;
+
+            var dialog = new ContentDialog
+            {
+                Title = "No Updates Available",
+                Content = "You are running the latest version.",
+                PrimaryButtonText = "OK",
+                XamlRoot = xamlRoot
+            };
+
+            await dialog.ShowAsync();
+        }
+
+        private async Task ShowErrorDialogAsync(string message)
+        {
+            if (xamlRoot == null) return;
+
+            var dialog = new ContentDialog
+            {
+                Title = "Update Error",
+                Content = message,
+                PrimaryButtonText = "OK",
+                XamlRoot = xamlRoot
+            };
+
+            await dialog.ShowAsync();
+        }
+
+        private async Task<string?> GetLatestVersionAsync()
         {
             try
             {
@@ -81,10 +126,11 @@ namespace FileLocker
                 {
                     PropertyNameCaseInsensitive = true
                 });
-                return releaseInfo?.TagName?.TrimStart('v');
+                return releaseInfo?.TagName?.TrimStart('v') ?? null;
             }
-            catch
+            catch (Exception ex)
             {
+                await ShowErrorDialogAsync($"Update check failed: {ex.Message}");
                 return null;
             }
         }
@@ -106,7 +152,7 @@ namespace FileLocker
                 var downloadUrl = await GetDownloadUrlAsync();
                 if (string.IsNullOrEmpty(downloadUrl))
                 {
-                    MessageBox.Show("Could not find update installer download URL.");
+                    await ShowErrorDialogAsync("Could not find update installer download URL.");
                     return;
                 }
 
@@ -120,7 +166,7 @@ namespace FileLocker
 
                 if (!VerifyFile(tempPath))
                 {
-                    MessageBox.Show("The downloaded update could not be verified. Please download manually from my website, https://www.jeremymhayes.com");
+                    await ShowErrorDialogAsync("The downloaded update could not be verified. Please download manually from my website, https://www.jeremymhayes.com");
                     return;
                 }
 
@@ -130,15 +176,15 @@ namespace FileLocker
                     UseShellExecute = true
                 });
 
-                Application.Current.Shutdown();
+                Application.Current.Exit();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error downloading update: {ex.Message}\nPlease download manually from my website, https://www.jeremymhayes.com");
+                await ShowErrorDialogAsync($"Error downloading update: {ex.Message}\nPlease download manually from my website, https://www.jeremymhayes.com");
             }
         }
 
-        private async Task<string> GetDownloadUrlAsync()
+        private async Task<string?> GetDownloadUrlAsync()
         {
             try
             {
@@ -148,8 +194,8 @@ namespace FileLocker
                     PropertyNameCaseInsensitive = true
                 });
 
-                // Find the first asset with an .exe file extension
-                var installerAsset = releaseInfo?.Assets?.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+                // Ensure null safety by checking if Assets is null before accessing it
+                var installerAsset = releaseInfo?.Assets?.FirstOrDefault(static a => a.Name?.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true);
                 return installerAsset?.BrowserDownloadUrl;
             }
             catch
