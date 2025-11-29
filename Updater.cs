@@ -18,7 +18,7 @@ namespace FileLocker
     {
         private const string GITHUB_API_URL = "https://api.github.com/repos/AspectOV/FileLocker/releases/latest";
         private readonly HttpClient httpClient;
-        private readonly string currentVersion;
+        private readonly Version currentVersion;
         private XamlRoot? xamlRoot;
 
         private GitHubRelease? latestRelease;
@@ -30,8 +30,7 @@ namespace FileLocker
             httpClient.DefaultRequestHeaders.Add("User-Agent", "FileLocker-Updater");
             httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
             httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
-            // Get version from the assembly, which is set in FileLocker.csproj
-            currentVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.2";
+            currentVersion = GetCurrentVersion();
         }
 
         public void SetXamlRoot(XamlRoot root)
@@ -138,9 +137,42 @@ namespace FileLocker
 
         private bool IsNewVersionAvailable(Version latestVersion)
         {
-            if (!Version.TryParse(currentVersion, out var current)) return false;
+            return latestVersion > currentVersion;
+        }
 
-            return latestVersion > current;
+        private static Version GetCurrentVersion()
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var informationalVersion = assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+
+            if (TryParseSanitizedVersion(informationalVersion, out var parsed))
+            {
+                return parsed;
+            }
+
+            if (assembly.GetName().Version is Version assemblyVersion)
+            {
+                return assemblyVersion;
+            }
+
+            return new Version(1, 0, 2);
+        }
+
+        private static bool TryParseSanitizedVersion(string? versionString, out Version parsedVersion)
+        {
+            if (!string.IsNullOrWhiteSpace(versionString))
+            {
+                var sanitized = versionString.Split('+', '-')[0].Trim().TrimStart('v', 'V');
+                if (Version.TryParse(sanitized, out parsedVersion))
+                {
+                    return true;
+                }
+            }
+
+            parsedVersion = default!;
+            return false;
         }
 
         private async Task DownloadAndInstallUpdateAsync()
