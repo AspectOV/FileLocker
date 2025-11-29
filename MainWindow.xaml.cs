@@ -68,12 +68,8 @@ namespace FileLocker
             // Set window size to 600x800
             this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 600, 800));
 
-            // Initialize DropLabelControl
-            DropLabelControler = new TextBlock
-            {
-                Text = "📁 Drag files here or click to browse",
-                FontWeight = FontWeights.Normal
-            };
+            // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
+            DropLabelControler = DropLabel;
 
             // Create the plain text password TextBox (hidden by default)
             plainTextPasswordBox = new TextBox

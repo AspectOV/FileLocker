@@ -6,9 +6,11 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="FileLocker - Secure File Encryption"
+    MinHeight="650"
+    MinWidth="520"
     mc:Ignorable="d">
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -22,7 +24,8 @@
             Background="{ThemeResource SystemAccentColor}"
             BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
             BorderThickness="0,0,0,1"
-            CornerRadius="0,0,12,12">
+            CornerRadius="12"
+            Opacity="0.98">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -84,7 +87,7 @@
         <!--  Main Content  -->
         <Border
             Grid.Row="1"
-            Margin="32,24"
+            Margin="20"
             Padding="24"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
@@ -99,21 +102,27 @@
                     Padding="32"
                     AllowDrop="True"
                     Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                    BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                    BorderBrush="{ThemeResource SystemAccentColor}"
                     BorderThickness="2"
-                    CornerRadius="8"
+                    CornerRadius="10"
                     DragOver="DropPanel_DragOver"
                     Drop="DropPanel_Drop"
                     PointerPressed="DropPanel_PointerPressed">
                     <StackPanel
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Spacing="8">
+                        Spacing="12">
                         <TextBlock
                             x:Name="DropLabel"
                             HorizontalAlignment="Center"
                             FontSize="16"
+                            FontWeight="SemiBold"
                             Text="📁 Drag files here or click to browse" />
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Opacity="0.8"
+                            Text="You can add multiple files and folders at once." />
                         <Button
                             Padding="20,10"
                             HorizontalAlignment="Center"
@@ -130,16 +139,32 @@
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}"
                         BorderThickness="1"
-                        CornerRadius="4">
+                        CornerRadius="8">
                         <ListView
                             x:Name="FileListBox"
-                            MaxHeight="120"
+                            MaxHeight="140"
                             Margin="4"
-                            ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                            SelectionMode="None"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE8B7;" />
+                                        <TextBlock Text="{Binding}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                            <ListView.Footer>
+                                <TextBlock
+                                    Margin="8,4"
+                                    Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                    Text="Tip: Drag and drop files or click Browse to add more." />
+                            </ListView.Footer>
+                        </ListView>
                     </Border>
                     <Button
                         x:Name="ClearListButton"
-                        Margin="0,4,0,0"
+                        Margin="0,6,0,0"
                         Padding="10,5"
                         HorizontalAlignment="Right"
                         Click="ClearListButton_Click"
@@ -148,7 +173,14 @@
 
                 <!--  Password Section  -->
                 <StackPanel>
-                    <TextBlock FontWeight="Bold" Text="Password" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock FontWeight="Bold" Text="Password" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            FontSize="12"
+                            Text="At least 6 characters recommended" />
+                    </StackPanel>
                     <Grid Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="2*" />
@@ -200,6 +232,7 @@
                             IsOn="True"
                             OffContent="Disabled"
                             OnContent="Enabled"
+                            ToolTipService.ToolTip="Reduce file size before encryption for faster transfers."
                             Toggled="CompressModeToggle_Toggled" />
 
                         <ToggleSwitch
@@ -210,6 +243,7 @@
                             IsOn="False"
                             OffContent="Disabled"
                             OnContent="Enabled"
+                            ToolTipService.ToolTip="Obfuscate file names while keeping contents secure."
                             Toggled="ScrambleNamesToggle_Toggled" />
 
                         <ToggleSwitch
@@ -220,6 +254,7 @@
                             IsOn="False"
                             OffContent="Disabled"
                             OnContent="Enabled"
+                            ToolTipService.ToolTip="Hide encrypted data inside an image container."
                             Toggled="SteganographyToggle_Toggled" />
                     </Grid>
                 </StackPanel>
@@ -236,12 +271,14 @@
                         Background="{ThemeResource SystemAccentColor}"
                         Click="EncryptButton_Click"
                         Content="🔒 Encrypt Files"
+                        ToolTipService.ToolTip="Encrypt all selected files using the password above."
                         Foreground="White" />
                     <Button
                         x:Name="DecryptButton"
                         Padding="20,10"
                         Click="DecryptButton_Click"
-                        Content="🔓 Decrypt Files" />
+                        Content="🔓 Decrypt Files"
+                        ToolTipService.ToolTip="Decrypt selected .locked files with your password." />
                 </StackPanel>
             </StackPanel>
         </Border>
