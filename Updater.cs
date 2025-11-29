@@ -6,9 +6,11 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using System.Linq;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using System.Text.Json.Serialization;
+
+using Microsoft.UI.Xaml;           // XamlRoot, Application
+using Microsoft.UI.Xaml.Controls;  // ContentDialog
+
 
 namespace FileLocker
 {
@@ -18,6 +20,7 @@ namespace FileLocker
         private readonly HttpClient httpClient;
         private readonly string currentVersion;
         private XamlRoot? xamlRoot;
+
         private GitHubRelease? latestRelease;
 
         public Updater()
@@ -81,9 +84,14 @@ namespace FileLocker
             }
         }
 
+        // Replace all instances of 'if (xamlRoot == null)' with 'if (xamlRoot is null)'
+        // and 'if (xamlRoot != null)' with 'if (xamlRoot is not null)'
+
+        // Example fix for all relevant methods:
+
         private async Task<bool> ShowUpdateDialogAsync(Version latestVersion)
         {
-            if (xamlRoot == null) return false;
+            if (xamlRoot is null) return false;
 
             var dialog = new ContentDialog
             {
@@ -100,7 +108,7 @@ namespace FileLocker
 
         private async Task ShowNoUpdateDialogAsync()
         {
-            if (xamlRoot == null) return;
+            if (xamlRoot is null) return;
 
             var dialog = new ContentDialog
             {
@@ -115,7 +123,7 @@ namespace FileLocker
 
         private async Task ShowErrorDialogAsync(string message)
         {
-            if (xamlRoot == null) return;
+            if (xamlRoot is null) return;
 
             var dialog = new ContentDialog
             {
