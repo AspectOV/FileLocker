@@ -1,8 +1,4 @@
-using Microsoft.UI.Text;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
+using Microsoft.Win32;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -13,11 +9,10 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage;
-using Windows.Storage.Pickers;
-using Windows.UI;
-using WinRT.Interop;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -27,7 +22,7 @@ namespace FileLocker
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainWindow : Window
+    public partial class MainWindow : Window
     {
         private const string ENCRYPTED_EXTENSION = ".locked";
         private const int SALT_SIZE = 32;
@@ -58,14 +53,13 @@ namespace FileLocker
         public MainWindow()
         {
             InitializeComponent();
-            _updater.SetXamlRoot(this.Content.XamlRoot); // Set XamlRoot for dialogs
             FileListBox.ItemsSource = FileList;
             isDarkTheme = true;
             ThemeToggleButton.Content = "☀️";
             UpdateStatusLabel();
 
-            // Set window size to 600x800
-            this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 600, 800));
+            Width = 600;
+            Height = 800;
 
             // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
             DropLabelControler = DropLabel;
@@ -84,9 +78,9 @@ namespace FileLocker
         // --- Drag & Drop ---
         private void DropPanel_DragOver(object sender, DragEventArgs e)
         {
-            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
-                e.AcceptedOperation = DataPackageOperation.Copy;
+                e.Effects = DragDropEffects.Copy;
                 AnimateDropPanel(true);
                 DropLabelControler.Text = "🟢 Release to add files";
                 DropLabelControler.FontWeight = FontWeights.Bold;
@@ -99,31 +93,21 @@ namespace FileLocker
             DropLabelControler.Text = "📁 Drag files here or click to browse";
             DropLabelControler.FontWeight = FontWeights.Normal;
 
-            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
-                await ProcessDroppedFilesAsync(e.DataView);
+                var dropped = e.Data.GetData(DataFormats.FileDrop) as string[];
+                if (dropped is not null)
+                {
+                    await ProcessDroppedFilesAsync(dropped);
+                }
             }
         }
 
-        private async Task ProcessDroppedFilesAsync(DataPackageView dataView)
+        private async Task ProcessDroppedFilesAsync(IEnumerable<string> paths)
         {
             try
             {
-                var items = await dataView.GetStorageItemsAsync();
-                var files = new List<string>();
-
-                foreach (var item in items)
-                {
-                    if (item is StorageFile file)
-                    {
-                        files.Add(file.Path);
-                    }
-                    else if (item is StorageFolder folder)
-                    {
-                        files.Add(folder.Path);
-                    }
-                }
-
+                var files = paths.ToList();
                 if (files.Count > 0)
                 {
                     AddFilesToList(files.ToArray());
@@ -136,29 +120,27 @@ namespace FileLocker
             }
         }
 
-        private void DropPanel_PointerPressed(object sender, PointerRoutedEventArgs e)
+        private void DropPanel_PointerPressed(object sender, MouseButtonEventArgs e)
         {
             _ = BrowseFiles();
         }
 
-        private async Task BrowseFiles()
+        private Task BrowseFiles()
         {
-            var picker = new FileOpenPicker();
-
-            // Initialize the picker with the window handle
-            var hwnd = WindowNative.GetWindowHandle(this);
-            InitializeWithWindow.Initialize(picker, hwnd);
-
-            picker.FileTypeFilter.Add("*");
-            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-
-            var files = await picker.PickMultipleFilesAsync();
-            if (files.Count > 0)
+            var dialog = new OpenFileDialog
             {
-                var filePaths = files.Select(f => f.Path).ToArray();
-                AddFilesToList(filePaths);
-                SetStatus($"Added {filePaths.Length} file(s)");
+                Multiselect = true,
+                Filter = "All files (*.*)|*.*"
+            };
+
+            bool? result = dialog.ShowDialog(this);
+            if (result == true && dialog.FileNames.Length > 0)
+            {
+                AddFilesToList(dialog.FileNames);
+                SetStatus($"Added {dialog.FileNames.Length} file(s)");
             }
+
+            return Task.CompletedTask;
         }
 
         private async void BrowseFiles_Click(object sender, RoutedEventArgs e)
@@ -235,7 +217,7 @@ namespace FileLocker
         {
             if (string.IsNullOrEmpty(password))
             {
-                return new PasswordStrengthResult(0, "Enter a password to begin.", Microsoft.UI.Colors.Gray);
+                return new PasswordStrengthResult(0, "Enter a password to begin.", Colors.Gray);
             }
 
             int score = Math.Min(password.Length * 4, 30);
@@ -267,15 +249,15 @@ namespace FileLocker
             int finalScore = Math.Clamp(score, 0, 100);
             if (finalScore < 35)
             {
-                return new PasswordStrengthResult(finalScore, "Weak - use upper, lower, numbers, and symbols", Microsoft.UI.Colors.Red);
+                return new PasswordStrengthResult(finalScore, "Weak - use upper, lower, numbers, and symbols", Colors.Red);
             }
 
             if (finalScore < 70)
             {
-                return new PasswordStrengthResult(finalScore, "Fair - add more length for better security", Microsoft.UI.Colors.Orange);
+                return new PasswordStrengthResult(finalScore, "Fair - add more length for better security", Colors.Orange);
             }
 
-            return new PasswordStrengthResult(finalScore, "Strong - great mix of length and characters", Microsoft.UI.Colors.Green);
+            return new PasswordStrengthResult(finalScore, "Strong - great mix of length and characters", Colors.Green);
         }
 
         // --- Encrypt/Decrypt ---
@@ -835,8 +817,8 @@ namespace FileLocker
         {
             // Simple animation for drop panel
             var color = highlight ?
-                new SolidColorBrush(Microsoft.UI.Colors.LightGreen) :
-                new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                new SolidColorBrush(Colors.LightGreen) :
+                new SolidColorBrush(Colors.Transparent);
             DropPanel.Background = color;
         }
 
@@ -852,54 +834,33 @@ namespace FileLocker
         }
 
         // --- Dialog Helpers ---
-        private async Task ShowErrorDialogAsync(string message)
+        private Task ShowErrorDialogAsync(string message)
         {
-            var dialog = new ContentDialog
-            {
-                Title = "Error",
-                Content = message,
-                PrimaryButtonText = "OK",
-                XamlRoot = Content.XamlRoot
-            };
-            await dialog.ShowAsync();
+            MessageBox.Show(this, message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            return Task.CompletedTask;
         }
 
-        private async Task ShowInfoDialogAsync(string message, string title)
+        private Task ShowInfoDialogAsync(string message, string title)
         {
-            var dialog = new ContentDialog
-            {
-                Title = title,
-                Content = message,
-                PrimaryButtonText = "OK",
-                XamlRoot = Content.XamlRoot
-            };
-            await dialog.ShowAsync();
+            MessageBox.Show(this, message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+            return Task.CompletedTask;
         }
 
-        private async Task<bool> ShowConfirmDialogAsync(string message, string title)
+        private Task<bool> ShowConfirmDialogAsync(string message, string title)
         {
-            var dialog = new ContentDialog
-            {
-                Title = title,
-                Content = message,
-                PrimaryButtonText = "Yes",
-                SecondaryButtonText = "No",
-                XamlRoot = Content.XamlRoot
-            };
-            var result = await dialog.ShowAsync();
-            return result == ContentDialogResult.Primary;
+            var result = MessageBox.Show(this, message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            return Task.FromResult(result == MessageBoxResult.Yes);
         }
 
         // --- Window Controls ---
         private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
         {
-            _updater.SetXamlRoot(this.Content.XamlRoot); // Ensure XamlRoot is set before showing dialogs
             await _updater.CheckForUpdatesAsync();
         }
 
         private async void About_Click(object sender, RoutedEventArgs e)
         {
-            await ShowInfoDialogAsync("FileLocker WinUI 3\nA secure file encryption tool using AES-256-GCM encryption.\n\n© 2025 Jeremy Hayes", "About FileLocker");
+            await ShowInfoDialogAsync("FileLocker\nA secure file encryption tool using AES-256-GCM encryption.", "About FileLocker");
         }
 
         private void Minimize_Click(object sender, RoutedEventArgs e)
@@ -957,25 +918,25 @@ namespace FileLocker
         // Advanced options event handlers
         private void CompressModeToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (sender is ToggleSwitch toggleSwitch)
+            if (sender is CheckBox checkBox)
             {
-                IsCompressModeEnabled = toggleSwitch.IsOn;
+                IsCompressModeEnabled = checkBox.IsChecked == true;
             }
         }
 
         private void ScrambleNamesToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (sender is ToggleSwitch toggleSwitch)
+            if (sender is CheckBox checkBox)
             {
-                IsScrambleNamesEnabled = toggleSwitch.IsOn;
+                IsScrambleNamesEnabled = checkBox.IsChecked == true;
             }
         }
 
         private void SteganographyToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (sender is ToggleSwitch toggleSwitch)
+            if (sender is CheckBox checkBox)
             {
-                IsSteganographyEnabled = toggleSwitch.IsOn;
+                IsSteganographyEnabled = checkBox.IsChecked == true;
             }
         }
         // Add this method to the MainWindow class to fix CS0103
