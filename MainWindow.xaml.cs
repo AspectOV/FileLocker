@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -68,12 +69,8 @@ namespace FileLocker
             // Set window size to 600x800
             this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 600, 800));
 
-            // Initialize DropLabelControl
-            DropLabelControler = new TextBlock
-            {
-                Text = "📁 Drag files here or click to browse",
-                FontWeight = FontWeights.Normal
-            };
+            // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
+            DropLabelControler = DropLabel;
 
             // Create the plain text password TextBox (hidden by default)
             plainTextPasswordBox = new TextBox
@@ -135,7 +132,7 @@ namespace FileLocker
             {
                 var items = await dataView.GetStorageItemsAsync();
                 var files = new List<string>();
-                
+
                 foreach (var item in items)
                 {
                     if (item is StorageFile file)
@@ -168,11 +165,11 @@ namespace FileLocker
         private async Task BrowseFiles()
         {
             var picker = new FileOpenPicker();
-            
+
             // Initialize the picker with the window handle
             var hwnd = WindowNative.GetWindowHandle(this);
             InitializeWithWindow.Initialize(picker, hwnd);
-            
+
             picker.FileTypeFilter.Add("*");
             picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
 
@@ -274,7 +271,7 @@ namespace FileLocker
             // Update password strength
             int strength = CalculatePasswordStrength(PasswordBox.Password);
             PasswordStrengthBar.Value = strength;
-            
+
             if (strength < 30)
             {
                 PasswordStrengthText.Text = "Weak";
@@ -358,13 +355,13 @@ namespace FileLocker
             try
             {
                 SetUIEnabled(false);
-                
+
                 // Capture password on UI thread before starting background tasks
                 string password = PasswordBox.Password;
-                
+
                 var allFiles = selectedPaths.ToList();
                 int processed = 0;
-                
+
                 foreach (string filePath in allFiles)
                 {
                     try
@@ -377,7 +374,7 @@ namespace FileLocker
                         {
                             await Task.Run(() => DecryptFileAdvanced(filePath, password));
                         }
-                        
+
                         processed++;
                         SetStatus($"Processed {processed}/{allFiles.Count} files...");
                     }
@@ -386,9 +383,9 @@ namespace FileLocker
                         await ShowErrorDialogAsync($"Error processing {Path.GetFileName(filePath)}: {ex.Message}");
                     }
                 }
-                
+
                 SetStatus($"Completed! Processed {processed} files.");
-                
+
                 // Clear the list after successful processing
                 selectedPaths.Clear();
                 FileList.Clear();
@@ -702,8 +699,8 @@ namespace FileLocker
         private void AnimateDropPanel(bool highlight)
         {
             // Simple animation for drop panel
-            var color = highlight ? 
-                new SolidColorBrush(Microsoft.UI.Colors.LightGreen) : 
+            var color = highlight ?
+                new SolidColorBrush(Microsoft.UI.Colors.LightGreen) :
                 new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             DropPanel.Background = color;
         }
