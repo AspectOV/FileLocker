@@ -1,172 +1,264 @@
-﻿<Window x:Class="FileLocker.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:FileLocker"
-        mc:Ignorable="d"
-        Title="FileLocker - AES-256-GCM Encryption Tool"
-        MinHeight="600" MinWidth="400"
-        Height="800" Width="600"
-        ResizeMode="CanResize"
-        WindowStartupLocation="CenterScreen"
-        Background="Transparent"
-        WindowStyle="None"
-        AllowsTransparency="True" Foreground="#00000000">
-    <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="20" Effect="{DynamicResource CardShadowEffect}">
-        <Grid>
-            <!-- Custom Top Bar -->
-            <Border Background="{DynamicResource PanelBrush}" Height="44" VerticalAlignment="Top" CornerRadius="12,12,0,0" Effect="{DynamicResource CardShadowEffect}" MouseDown="TopBar_MouseDown">
-                <Grid Height="44" VerticalAlignment="Top">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <!-- App Icon -->
-                    <Image Grid.Column="0" Width="28" Height="28" Margin="8,8,0,8" Source="Filelocker2.ico" VerticalAlignment="Center"/>
-                    <!-- App Name -->
-                    <TextBlock Grid.Column="1" FontWeight="Bold" FontSize="18" Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" Margin="8,0,0,0" Text="FileLocker - File Encryptor"/>
-                    <!-- Theme Toggle -->
-                    <Button Grid.Column="2" x:Name="ThemeToggleButton" Content="🌙" Width="36" Height="36" Margin="4,0,0,0" Style="{StaticResource IconButtonStyle}" Click="ThemeToggleButton_Click" ToolTip="Toggle Light/Dark Theme" VerticalAlignment="Center" FontSize="21"/>
-                    <!-- Help/About -->
-                    <Button Grid.Column="3" Content="?" Width="36" Height="36" Margin="4,0,0,0" Style="{StaticResource IconButtonStyle}" Click="About_Click" ToolTip="About" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="25"/>
-                    <!-- Check for Updates -->
-                    <Button Grid.Column="4" Content="⟳" Width="36" Height="36" Margin="4,0,0,0" Style="{StaticResource IconButtonStyle}" Click="CheckUpdates_Click" ToolTip="Check for Updates" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="25"/>
-                    <!-- Window Controls -->
-                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,8,0">
-                        <Button Content="_" Width="32" Height="32" Style="{StaticResource IconButtonStyle}" Click="Minimize_Click" ToolTip="Minimize"/>
-                        <Button Content="☐" Width="32" Height="32" Style="{StaticResource IconButtonStyle}" Click="MaximizeRestore_Click" ToolTip="Maximize/Restore"/>
-                        <Button Content="✕" Width="32" Height="32" Style="{StaticResource IconButtonStyle}" Click="Close_Click" ToolTip="Close"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-            <!-- Main Content with margin below top bar -->
-            <Grid Margin="0,44,0,0">
-                <Grid.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Offset="0" Color="{DynamicResource BackgroundColor1}"/>
-                        <GradientStop Offset="1" Color="{DynamicResource BackgroundColor2}"/>
-                    </LinearGradientBrush>
-                </Grid.Background>
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <!-- Content Area -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <Border Background="{DynamicResource PanelBrush}" CornerRadius="20" Padding="24" Margin="16" Effect="{DynamicResource CardShadowEffect}">
-                            <StackPanel>
-                                <!-- Instruction -->
-                                <TextBlock Text="Drag &amp; drop files/folders or click to select"
-                                           FontWeight="Bold" 
-                                           FontSize="16" 
-                                           TextAlignment="Center"
-                                           Margin="0,10,0,10"/>
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="FileLocker.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="FileLocker - Secure File Encryption"
+    mc:Ignorable="d">
 
-                                <!-- Drop Panel -->
-                                <Border x:Name="DropPanel" Style="{StaticResource DropPanelStyle}" Height="120" AllowDrop="True" MouseLeftButtonUp="DropPanel_Click" DragEnter="DropPanel_DragEnter" DragLeave="DropPanel_DragLeave" Drop="DropPanel_Drop" Background="#0AFFFFFF">
-                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <Canvas Width="48" Height="36" HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                                        <TextBlock x:Name="DropLabel" Text="📁 Drag files here or click to browse" FontSize="14" Height="74"/>
-                                    </StackPanel>
-                                </Border>
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-                                <!-- File List -->
-                                <Border CornerRadius="8" BorderBrush="{DynamicResource BorderColorBrush}" BorderThickness="1" Margin="0,12,0,0">
-                                    <ListBox x:Name="FileListBox" Height="120" ItemsSource="{Binding FileList}" />
-                                </Border>
+        <!--  Header  -->
+        <Border
+            Grid.Row="0"
+            Padding="24,16"
+            Background="{ThemeResource SystemAccentColor}"
+            BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+            BorderThickness="0,0,0,1"
+            CornerRadius="0,0,12,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                                <!-- Clear Button -->
-                                <Button x:Name="ClearListButton" 
-                                        Content="Clear All" 
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Margin="0,5,0,0"
-                                        HorizontalAlignment="Right"
-                                        Click="ClearListButton_Click" Width="94"/>
+                <StackPanel Grid.Column="0" Orientation="Vertical">
+                    <TextBlock
+                        FontSize="28"
+                        FontWeight="Bold"
+                        Foreground="White"
+                        Text="FileLocker" />
+                    <TextBlock
+                        FontSize="16"
+                        Foreground="White"
+                        Opacity="0.9"
+                        Text="Secure File Encryption" />
+                </StackPanel>
 
-                                <!-- Password Section -->
-                                <StackPanel Margin="0,18,0,0">
-                                    <TextBlock Text="Encryption Password:" Margin="0,0,0,5"/>
-                                    <PasswordBox x:Name="PasswordBox" 
-                                                 Width="320" 
-                                                 Height="30" 
-                                                 PasswordChanged="PasswordBox_PasswordChanged" FontSize="16"/>
-
-                                    <CheckBox x:Name="ShowPasswordCheckBox" 
-                                             Content="Show Password" 
-                                             Margin="0,0,0,0"
-                                             Checked="ShowPasswordCheckBox_Checked"
-                                             Unchecked="ShowPasswordCheckBox_Unchecked"/>
-                                </StackPanel>
-
-                                <!-- Password Strength -->
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                    <TextBlock x:Name="StrengthLabel" 
-                                               Text="Password Strength:" 
-                                               VerticalAlignment="Center"/>
-                                    <ProgressBar x:Name="StrengthBar" 
-                                                 Height="15" 
-                                                 Maximum="100" 
-                                                 Margin="10,0,0,0" 
-                                                 Width="180"
-                                                 Foreground="{DynamicResource StrengthBarColorBrush}"/>
-                                </StackPanel>
-
-                                <!-- Options -->
-                                <StackPanel Orientation="Horizontal" Margin="-4,15,0,0">
-                                    <CheckBox x:Name="CompressionCheckBox" 
-                                             Content="Compress Files" 
-                                             Width="102"/>
-                                    <CheckBox x:Name="SteganographyCheckBox" 
-                                             Content="Steganography Mode" 
-                                             Width="139"/>
-                                    <CheckBox x:Name="ScrambleNamesCheckBox" 
-                                             Content="Scramble File Names" 
-                                             Width="135" IsChecked="False"/>
-                                </StackPanel>
-
-                                <!-- Action Buttons -->
-                                <StackPanel Orientation="Horizontal" 
-                                          HorizontalAlignment="Center" 
-                                          Margin="0,20,0,0">
-                                    <Button x:Name="EncryptButton" 
-                                            Content="🔒 ENCRYPT" 
-                                            Width="160" 
-                                            Height="45" 
-                                            Style="{StaticResource PrimaryButtonStyle}"
-                                            Click="EncryptButton_Click" FontSize="17"/>
-                                    <Button x:Name="DecryptButton" 
-                                            Content="🔓 DECRYPT" 
-                                            Width="160" 
-                                            Height="45" 
-                                            Style="{StaticResource PrimaryButtonStyle}"
-                                            Margin="10,0,0,0"
-                                            Click="DecryptButton_Click" FontSize="17"/>
-                                </StackPanel>
-
-                                <!-- Progress Bar -->
-                                <ProgressBar x:Name="MainProgressBar" 
-                                            Height="25" 
-                                            Margin="0,25,0,0" 
-                                            Visibility="Collapsed"/>
-
-                                <!-- Status Label -->
-                                <TextBlock x:Name="StatusLabel" 
-                                           Text="Ready - Add files to begin" 
-                                           TextAlignment="Center" 
-                                           Margin="0,10,0,0" 
-                                           FontSize="12"/>
-                            </StackPanel>
-                        </Border>
-                    </ScrollViewer>
-                </Grid>
+                <StackPanel
+                    Grid.Column="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        x:Name="CheckUpdatesButton"
+                        Padding="12,6"
+                        Background="Transparent"
+                        BorderBrush="White"
+                        BorderThickness="1"
+                        Click="CheckUpdates_Click"
+                        Content="Check Updates"
+                        Foreground="White" />
+                    <Button
+                        x:Name="AboutButton"
+                        Padding="12,6"
+                        Background="Transparent"
+                        BorderBrush="White"
+                        BorderThickness="1"
+                        Click="About_Click"
+                        Content="About"
+                        Foreground="White" />
+                    <Button
+                        x:Name="ThemeToggleButton"
+                        Width="40"
+                        Height="32"
+                        Margin="8,0,0,0"
+                        Background="Transparent"
+                        BorderBrush="White"
+                        BorderThickness="1"
+                        Click="ThemeToggleButton_Click"
+                        Content="🌙"
+                        Foreground="White" />
+                </StackPanel>
             </Grid>
-        </Grid>
-    </Border>
+        </Border>
+
+        <!--  Main Content  -->
+        <Border
+            Grid.Row="1"
+            Margin="32,24"
+            Padding="24"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+            BorderThickness="1"
+            CornerRadius="12">
+            <StackPanel Spacing="24">
+
+                <!--  Drag & Drop Area  -->
+                <Border
+                    x:Name="DropPanel"
+                    Margin="0,0,0,8"
+                    Padding="32"
+                    AllowDrop="True"
+                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                    BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                    BorderThickness="2"
+                    CornerRadius="8"
+                    DragOver="DropPanel_DragOver"
+                    Drop="DropPanel_Drop"
+                    PointerPressed="DropPanel_PointerPressed">
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                        <TextBlock
+                            x:Name="DropLabel"
+                            HorizontalAlignment="Center"
+                            FontSize="16"
+                            Text="📁 Drag files here or click to browse" />
+                        <Button
+                            Padding="20,10"
+                            HorizontalAlignment="Center"
+                            Click="BrowseFiles_Click"
+                            Content="Browse Files" />
+                    </StackPanel>
+                </Border>
+
+                <!--  File List and Clear Button  -->
+                <StackPanel>
+                    <TextBlock FontWeight="Bold" Text="Selected Files" />
+                    <Border
+                        Margin="0,4,0,0"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <ListView
+                            x:Name="FileListBox"
+                            MaxHeight="120"
+                            Margin="4"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    </Border>
+                    <Button
+                        x:Name="ClearListButton"
+                        Margin="0,4,0,0"
+                        Padding="10,5"
+                        HorizontalAlignment="Right"
+                        Click="ClearListButton_Click"
+                        Content="Clear List" />
+                </StackPanel>
+
+                <!--  Password Section  -->
+                <StackPanel>
+                    <TextBlock FontWeight="Bold" Text="Password" />
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <PasswordBox
+                            x:Name="PasswordBox"
+                            Grid.Column="0"
+                            Margin="0,0,10,0"
+                            PasswordChanged="PasswordBox_PasswordChanged" />
+                        <CheckBox
+                            x:Name="ShowPasswordCheckBox"
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Checked="ShowPasswordCheckBox_Checked"
+                            Content="Show"
+                            Unchecked="ShowPasswordCheckBox_Unchecked" />
+                    </Grid>
+                    <ProgressBar
+                        x:Name="PasswordStrengthBar"
+                        Height="4"
+                        Margin="0,5,0,0"
+                        Maximum="100" />
+                    <TextBlock
+                        x:Name="PasswordStrengthText"
+                        Margin="0,2,0,0"
+                        FontSize="12"
+                        Opacity="0.7" />
+                </StackPanel>
+
+                <!--  Advanced Options  -->
+                <StackPanel>
+                    <TextBlock
+                        Margin="0,0,0,8"
+                        FontWeight="Bold"
+                        Text="Advanced Options" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <ToggleSwitch
+                            x:Name="CompressModeToggle"
+                            Grid.Column="0"
+                            Margin="0,0,8,0"
+                            Header="Compress Files"
+                            IsOn="True"
+                            OffContent="Disabled"
+                            OnContent="Enabled"
+                            Toggled="CompressModeToggle_Toggled" />
+
+                        <ToggleSwitch
+                            x:Name="ScrambleNamesToggle"
+                            Grid.Column="1"
+                            Margin="4,0"
+                            Header="Scramble Names"
+                            IsOn="False"
+                            OffContent="Disabled"
+                            OnContent="Enabled"
+                            Toggled="ScrambleNamesToggle_Toggled" />
+
+                        <ToggleSwitch
+                            x:Name="SteganographyToggle"
+                            Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Header="Steganography"
+                            IsOn="False"
+                            OffContent="Disabled"
+                            OnContent="Enabled"
+                            Toggled="SteganographyToggle_Toggled" />
+                    </Grid>
+                </StackPanel>
+
+                <!--  Action Buttons  -->
+                <StackPanel
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="24">
+                    <Button
+                        x:Name="EncryptButton"
+                        Padding="20,10"
+                        Background="{ThemeResource SystemAccentColor}"
+                        Click="EncryptButton_Click"
+                        Content="🔒 Encrypt Files"
+                        Foreground="White" />
+                    <Button
+                        x:Name="DecryptButton"
+                        Padding="20,10"
+                        Click="DecryptButton_Click"
+                        Content="🔓 Decrypt Files" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!--  Status Bar  -->
+        <Border
+            Grid.Row="2"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid>
+                <TextBlock
+                    x:Name="StatusLabel"
+                    Margin="10,5"
+                    VerticalAlignment="Center"
+                    Text="Ready - Add files to begin" />
+            </Grid>
+        </Border>
+    </Grid>
 </Window>
