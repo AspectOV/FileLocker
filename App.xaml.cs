@@ -1,14 +1,20 @@
-﻿using System.Configuration;
-using System.Data;
-using System.Windows;
+using Microsoft.UI.Xaml;
 
 namespace FileLocker
 {
-    /// <summary>
-    /// Interaction logic for App.xaml
-    /// </summary>
     public partial class App : Application
     {
-    }
+        private Window? _window;
 
+        public App()
+        {
+            InitializeComponent();
+        }
+
+        protected override void OnLaunched(LaunchActivatedEventArgs args)
+        {
+            _window = new MainWindow();
+            _window.Activate();
+        }
+    }
 }
