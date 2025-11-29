@@ -49,6 +49,20 @@ namespace FileLocker
         public string StatusText { get; set; } = "Ready - Add files to begin";
         private TextBlock? DropLabelControler;
         private AppWindow? _appWindow;
+        private XamlRoot _xamlRoot;
+
+        // UI element references (resolved after InitializeComponent)
+        private ListView FileListBox { get; }
+        private Button ThemeToggleButton { get; }
+        private TextBlock DropLabel { get; }
+        private TextBlock StatusLabel { get; }
+        private PasswordBox PasswordBox { get; }
+        private ProgressBar PasswordStrengthBar { get; }
+        private TextBlock PasswordStrengthText { get; }
+        private Button EncryptButton { get; }
+        private Button DecryptButton { get; }
+        private Button ClearListButton { get; }
+        private Border DropPanel { get; }
 
         // Advanced options properties
         public bool IsCompressModeEnabled { get; set; } = true;
@@ -63,7 +77,22 @@ namespace FileLocker
         public MainWindow()
         {
             InitializeComponent();
-            _updater.SetXamlRoot(this.Content.XamlRoot); // Set XamlRoot for dialogs
+            var root = Content as FrameworkElement ?? throw new InvalidOperationException("Window content not loaded.");
+
+            FileListBox = GetElement<ListView>(root, nameof(FileListBox));
+            ThemeToggleButton = GetElement<Button>(root, nameof(ThemeToggleButton));
+            DropLabel = GetElement<TextBlock>(root, nameof(DropLabel));
+            StatusLabel = GetElement<TextBlock>(root, nameof(StatusLabel));
+            PasswordBox = GetElement<PasswordBox>(root, nameof(PasswordBox));
+            PasswordStrengthBar = GetElement<ProgressBar>(root, nameof(PasswordStrengthBar));
+            PasswordStrengthText = GetElement<TextBlock>(root, nameof(PasswordStrengthText));
+            EncryptButton = GetElement<Button>(root, nameof(EncryptButton));
+            DecryptButton = GetElement<Button>(root, nameof(DecryptButton));
+            ClearListButton = GetElement<Button>(root, nameof(ClearListButton));
+            DropPanel = GetElement<Border>(root, nameof(DropPanel));
+
+            _xamlRoot = root.XamlRoot;
+            _updater.SetXamlRoot(_xamlRoot); // Set XamlRoot for dialogs
             FileListBox.ItemsSource = FileList;
             isDarkTheme = true;
             ThemeToggleButton.Content = "☀️";
@@ -75,6 +104,12 @@ namespace FileLocker
             // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
             DropLabelControler = DropLabel;
 
+        }
+
+        private static TElement GetElement<TElement>(FrameworkElement root, string name) where TElement : class
+        {
+            return root.FindName(name) as TElement
+                ?? throw new InvalidOperationException($"Unable to locate element '{name}'.");
         }
 
         private void InitializeAppWindow()
@@ -907,7 +942,7 @@ namespace FileLocker
         // --- Window Controls ---
         private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
         {
-            _updater.SetXamlRoot(this.Content.XamlRoot); // Ensure XamlRoot is set before showing dialogs
+            _updater.SetXamlRoot(_xamlRoot); // Ensure XamlRoot is set before showing dialogs
             await _updater.CheckForUpdatesAsync();
         }
 
