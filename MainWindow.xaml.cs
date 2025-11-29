@@ -42,12 +42,12 @@ namespace FileLocker
         private static readonly byte[] StegoCarrierPng = Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=");
 
-        private List<string> selectedPaths = new List<string>();
+        private readonly List<string> selectedPaths = new();
         private readonly Updater _updater = new();
         private bool isDarkTheme = true;
         public ObservableCollection<string> FileList { get; set; } = new();
         public string StatusText { get; set; } = "Ready - Add files to begin";
-        private TextBlock? DropLabelControler;
+        private TextBlock DropLabelControler;
         private AppWindow? _appWindow;
         private XamlRoot _xamlRoot;
 
@@ -92,7 +92,6 @@ namespace FileLocker
             DropPanel = GetElement<Border>(root, nameof(DropPanel));
 
             _xamlRoot = root.XamlRoot;
-            _updater.SetXamlRoot(_xamlRoot); // Set XamlRoot for dialogs
             FileListBox.ItemsSource = FileList;
             isDarkTheme = true;
             ThemeToggleButton.Content = "☀️";
@@ -572,7 +571,7 @@ namespace FileLocker
         private string GenerateObfuscatedFilename(string originalPath)
         {
             string? directory = Path.GetDirectoryName(originalPath);
-            if (directory == null) 
+            if (directory == null)
                 throw new InvalidOperationException("File directory is null.");
             string randomName = GenerateRandomString(16) + ENCRYPTED_EXTENSION;
             return Path.Combine(directory, randomName);
@@ -942,7 +941,6 @@ namespace FileLocker
         // --- Window Controls ---
         private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
         {
-            _updater.SetXamlRoot(_xamlRoot); // Ensure XamlRoot is set before showing dialogs
             await _updater.CheckForUpdatesAsync();
         }
 
