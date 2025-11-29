@@ -1,5 +1,3 @@
-using Microsoft.UI.Xaml;           // XamlRoot, Application
-using Microsoft.UI.Xaml.Controls;  // ContentDialog
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,18 +7,20 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 
 namespace FileLocker
 {
     public class Updater
     {
         private const string GITHUB_API_URL = "https://api.github.com/repos/AspectOV/FileLocker/releases/latest";
+
         private readonly HttpClient httpClient;
         private readonly Version currentVersion;
-        private XamlRoot? xamlRoot;
 
         private GitHubRelease? latestRelease;
+        private XamlRoot? _xamlRoot;   // set from MainWindow
 
         public Updater()
         {
@@ -32,9 +32,9 @@ namespace FileLocker
             currentVersion = GetCurrentVersion();
         }
 
-        public void SetXamlRoot(XamlRoot root)
+        public void SetXamlRoot(XamlRoot xamlRoot)
         {
-            xamlRoot = root;
+            _xamlRoot = xamlRoot;
         }
 
         public async Task CheckForUpdatesAsync(bool silent = false)
@@ -82,22 +82,24 @@ namespace FileLocker
             }
         }
 
-        // Replace all instances of 'if (xamlRoot == null)' with 'if (xamlRoot is null)'
-        // and 'if (xamlRoot != null)' with 'if (xamlRoot is not null)'
-
-        // Example fix for all relevant methods:
+        // ---------- UI helpers (ContentDialog instead of MessageBox) ----------
 
         private async Task<bool> ShowUpdateDialogAsync(Version latestVersion)
         {
-            if (xamlRoot is null) return false;
+            if (_xamlRoot is null)
+                return false; // no UI available
 
             var dialog = new ContentDialog
             {
+                XamlRoot = _xamlRoot,
                 Title = "Update Available",
-                Content = $"A new version ({latestVersion}) is available. Current version: {currentVersion}\n\nWould you like to download it now?",
-                PrimaryButtonText = "Yes",
-                SecondaryButtonText = "No",
-                XamlRoot = xamlRoot
+                Content =
+                    $"A new version ({latestVersion}) is available.\n" +
+                    $"Current version: {currentVersion}\n\n" +
+                    "Would you like to download it now?",
+                PrimaryButtonText = "Download",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary
             };
 
             var result = await dialog.ShowAsync();
@@ -106,14 +108,15 @@ namespace FileLocker
 
         private async Task ShowNoUpdateDialogAsync()
         {
-            if (xamlRoot is null) return;
+            if (_xamlRoot is null)
+                return;
 
             var dialog = new ContentDialog
             {
+                XamlRoot = _xamlRoot,
                 Title = "No Updates Available",
                 Content = "You are running the latest version.",
-                PrimaryButtonText = "OK",
-                XamlRoot = xamlRoot
+                PrimaryButtonText = "OK"
             };
 
             await dialog.ShowAsync();
@@ -121,18 +124,21 @@ namespace FileLocker
 
         private async Task ShowErrorDialogAsync(string message)
         {
-            if (xamlRoot is null) return;
+            if (_xamlRoot is null)
+                return;
 
             var dialog = new ContentDialog
             {
+                XamlRoot = _xamlRoot,
                 Title = "Update Error",
                 Content = message,
-                PrimaryButtonText = "OK",
-                XamlRoot = xamlRoot
+                PrimaryButtonText = "OK"
             };
 
             await dialog.ShowAsync();
         }
+
+        // ---------- Version helpers ----------
 
         private bool IsNewVersionAvailable(Version latestVersion)
         {
@@ -156,6 +162,7 @@ namespace FileLocker
                 return assemblyVersion;
             }
 
+            // Fallback
             return new Version(1, 0, 2);
         }
 
@@ -173,6 +180,8 @@ namespace FileLocker
             parsedVersion = default!;
             return false;
         }
+
+        // ---------- Download + GitHub API ----------
 
         private async Task DownloadAndInstallUpdateAsync()
         {
@@ -201,7 +210,9 @@ namespace FileLocker
 
                 if (!VerifyFile(tempPath))
                 {
-                    await ShowErrorDialogAsync("The downloaded update could not be verified. Please download manually from my website, https://www.jeremymhayes.com");
+                    await ShowErrorDialogAsync(
+                        "The downloaded update could not be verified. " +
+                        "Please download manually from https://www.jeremymhayes.com");
                     return;
                 }
 
@@ -211,11 +222,13 @@ namespace FileLocker
                     UseShellExecute = true
                 });
 
-                Application.Current.Exit();
+                Microsoft.UI.Xaml.Application.Current?.Exit();
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync($"Error downloading update: {ex.Message}\nPlease download manually from my website, https://www.jeremymhayes.com");
+                await ShowErrorDialogAsync(
+                    $"Error downloading update: {ex.Message}\n" +
+                    "Please download manually from https://www.jeremymhayes.com");
             }
         }
 
@@ -284,7 +297,7 @@ namespace FileLocker
             try
             {
                 // Simple check if file exists
-                // Ideally i should verify hash/signature here
+                // Ideally verify hash/signature here
                 return File.Exists(filePath);
             }
             catch
@@ -292,6 +305,8 @@ namespace FileLocker
                 return false;
             }
         }
+
+        // ---------- DTOs ----------
 
         private class GitHubRelease
         {
