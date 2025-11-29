@@ -941,7 +941,7 @@ namespace FileLocker
         // --- Window Controls ---
         private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
         {
-            await _updater.CheckForUpdatesAsync();
+            await _updater.CheckForUpdatesAsync(this.Content.XamlRoot);
         }
 
         private async void About_Click(object sender, RoutedEventArgs e)
