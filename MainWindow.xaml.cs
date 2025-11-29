@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Buffers.Binary;
 using System.IO.Compression;
+using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -23,6 +25,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Microsoft.UI.Xaml.Media.Animation;
 using WinRT.Interop;
 using Microsoft.UI.Text;
+using Windows.UI;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -42,6 +45,9 @@ namespace FileLocker
         private const byte FORMAT_VERSION = 2; // Version for compatibility
         private const int MIN_PADDING_SIZE = 1024; // Minimum padding to hide file size
         private const int MAX_PADDING_SIZE = 8192; // Maximum padding
+        private const string STEGO_CHUNK_TYPE = "flDR";
+        private static readonly byte[] StegoCarrierPng = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=");
 
         private List<string> selectedPaths = new List<string>();
         private readonly Updater _updater = new Updater();
@@ -55,7 +61,7 @@ namespace FileLocker
         public bool IsScrambleNamesEnabled { get; set; } = false;
         public bool IsSteganographyEnabled { get; set; } = false;
 
-        private TextBox plainTextPasswordBox;
+        private record struct PasswordStrengthResult(int Score, string Feedback, Color BarColor);
 
         public MainWindow()
         {
@@ -72,25 +78,6 @@ namespace FileLocker
             // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
             DropLabelControler = DropLabel;
 
-            // Create the plain text password TextBox (hidden by default)
-            plainTextPasswordBox = new TextBox
-            {
-                Width = PasswordBox.Width,
-                Height = PasswordBox.Height,
-                Visibility = Visibility.Collapsed,
-                Margin = PasswordBox.Margin,
-                VerticalAlignment = PasswordBox.VerticalAlignment,
-                HorizontalAlignment = PasswordBox.HorizontalAlignment
-            };
-
-            // Insert after PasswordBox in the parent StackPanel
-            var parent = PasswordBox.Parent as Panel;
-            if (parent != null)
-            {
-                int idx = parent.Children.IndexOf(PasswordBox);
-                parent.Children.Insert(idx + 1, plainTextPasswordBox);
-            }
-            plainTextPasswordBox.TextChanged += (s, e) => PasswordBox.Password = plainTextPasswordBox.Text;
         }
 
         private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
@@ -244,77 +231,59 @@ namespace FileLocker
         }
 
         // --- Password Section ---
-        private void ShowPasswordCheckBox_Checked(object sender, RoutedEventArgs e)
-        {
-            // Show plain text
-            plainTextPasswordBox.Text = PasswordBox.Password;
-            plainTextPasswordBox.Visibility = Visibility.Visible;
-            PasswordBox.Visibility = Visibility.Collapsed;
-        }
-
-        private void ShowPasswordCheckBox_Unchecked(object sender, RoutedEventArgs e)
-        {
-            // Hide plain text
-            PasswordBox.Password = plainTextPasswordBox.Text;
-            plainTextPasswordBox.Visibility = Visibility.Collapsed;
-            PasswordBox.Visibility = Visibility.Visible;
-        }
-
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
         {
-            // Sync with plain text box if it's visible
-            if (plainTextPasswordBox.Visibility == Visibility.Visible)
-            {
-                plainTextPasswordBox.Text = PasswordBox.Password;
-            }
-
-            // Update password strength
-            int strength = CalculatePasswordStrength(PasswordBox.Password);
-            PasswordStrengthBar.Value = strength;
-
-            if (strength < 30)
-            {
-                PasswordStrengthText.Text = "Weak";
-                PasswordStrengthBar.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
-            }
-            else if (strength < 70)
-            {
-                PasswordStrengthText.Text = "Medium";
-                PasswordStrengthBar.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Orange);
-            }
-            else
-            {
-                PasswordStrengthText.Text = "Strong";
-                PasswordStrengthBar.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Green);
-            }
+            var evaluation = CalculatePasswordStrength(PasswordBox.Password);
+            PasswordStrengthBar.Value = evaluation.Score;
+            PasswordStrengthText.Text = evaluation.Feedback;
+            PasswordStrengthBar.Foreground = new SolidColorBrush(evaluation.BarColor);
         }
 
-        private int CalculatePasswordStrength(string password)
+        private PasswordStrengthResult CalculatePasswordStrength(string password)
         {
-            if (string.IsNullOrEmpty(password)) return 0;
-            int score = 0;
-            score += Math.Min(password.Length * 4, 25);
-            bool hasLower = false, hasUpper = false, hasDigit = false, hasSpecial = false;
-            foreach (char c in password)
+            if (string.IsNullOrEmpty(password))
             {
-                if (char.IsLower(c)) hasLower = true;
-                else if (char.IsUpper(c)) hasUpper = true;
-                else if (char.IsDigit(c)) hasDigit = true;
-                else hasSpecial = true;
+                return new PasswordStrengthResult(0, "Enter a password to begin.", Microsoft.UI.Colors.Gray);
             }
-            if (hasLower) score += 5;
-            if (hasUpper) score += 5;
-            if (hasDigit) score += 5;
-            if (hasSpecial) score += 10;
-            if (hasLower && hasUpper) score += 10;
-            if (hasDigit && hasSpecial) score += 10;
-            if (password.Length < 8) score -= 15;
-            if (password.Length < 6) score -= 25;
-            if (password.All(char.IsLetter)) score -= 10;
-            if (password.All(char.IsDigit)) score -= 15;
-            string[] commonPasswords = { "password", "123456", "qwerty", "letmein" };
-            if (commonPasswords.Contains(password.ToLower())) score = 5;
-            return Math.Clamp(score, 0, 100);
+
+            int score = Math.Min(password.Length * 4, 30);
+            bool hasLower = password.Any(char.IsLower);
+            bool hasUpper = password.Any(char.IsUpper);
+            bool hasDigit = password.Any(char.IsDigit);
+            bool hasSpecial = password.Any(ch => !char.IsLetterOrDigit(ch));
+
+            score += hasLower ? 5 : 0;
+            score += hasUpper ? 5 : 0;
+            score += hasDigit ? 10 : 0;
+            score += hasSpecial ? 15 : 0;
+
+            int uniqueChars = password.Distinct().Count();
+            score += Math.Min(uniqueChars * 2, 10);
+
+            if (password.Length >= 12 && hasLower && hasUpper && hasDigit && hasSpecial)
+            {
+                score += 15;
+            }
+
+            string lowered = password.ToLowerInvariant();
+            string[] commonPasswords = { "password", "123456", "qwerty", "letmein", "welcome", "admin" };
+            if (commonPasswords.Any(p => lowered.Contains(p)))
+            {
+                score = Math.Min(score, 20);
+            }
+
+            int finalScore = Math.Clamp(score, 0, 100);
+            if (finalScore < 35)
+            {
+                return new PasswordStrengthResult(finalScore, "Weak - use upper, lower, numbers, and symbols", Microsoft.UI.Colors.Red);
+            }
+
+            if (finalScore < 70)
+            {
+                return new PasswordStrengthResult(finalScore, "Fair - add more length for better security", Microsoft.UI.Colors.Orange);
+            }
+
+            return new PasswordStrengthResult(finalScore, "Strong - great mix of length and characters", Microsoft.UI.Colors.Green);
         }
 
         // --- Encrypt/Decrypt ---
@@ -342,9 +311,9 @@ namespace FileLocker
                 _ = ShowErrorDialogAsync("Please enter a password.");
                 return false;
             }
-            if (PasswordBox.Password.Length < 6)
+            if (PasswordBox.Password.Length < 8)
             {
-                _ = ShowConfirmDialogAsync("Password is very weak. Continue anyway?", "Weak Password");
+                _ = ShowConfirmDialogAsync("Password is very weak. Use at least 8 characters with mixed types.", "Weak Password");
                 return false;
             }
             return true;
@@ -406,30 +375,36 @@ namespace FileLocker
         {
             try
             {
-                bool isCompressed = IsCompressModeEnabled;
                 bool scrambleNames = IsScrambleNamesEnabled;
+                bool useSteganography = IsSteganographyEnabled;
                 byte[] salt = GenerateRandomBytes(SALT_SIZE);
                 byte[] iv = GenerateRandomBytes(IV_SIZE);
                 byte[] key = DeriveKeyArgon2(password, salt);
                 byte[] fileData = File.ReadAllBytes(filePath);
                 string originalFileName = Path.GetFileName(filePath) ?? string.Empty;
+
                 FileMetadata metadata = new FileMetadata
                 {
                     OriginalFileName = originalFileName,
                     OriginalSize = fileData.Length,
                     CreationTime = File.GetCreationTime(filePath),
                     LastWriteTime = File.GetLastWriteTime(filePath),
-                    IsCompressed = isCompressed
+                    IsSteganographyContainer = useSteganography
                 };
-                byte[] dataToEncrypt;
-                if (isCompressed)
+
+                byte[] dataToEncrypt = fileData;
+                if (IsCompressModeEnabled)
                 {
-                    dataToEncrypt = CompressData(fileData);
+                    dataToEncrypt = CompressData(fileData, out bool compressed);
+                    metadata.IsCompressed = compressed;
+                    if (!compressed)
+                    {
+                        dataToEncrypt = fileData;
+                    }
                 }
-                else
-                {
-                    dataToEncrypt = fileData;
-                }
+
+                metadata.ContentHash = ComputeSha256(fileData);
+
                 byte[] padding = GenerateRandomBytes(GenerateRandomPaddingSize());
                 byte[] metadataBytes = SerializeMetadata(metadata);
                 byte[] combined = new byte[4 + metadataBytes.Length + 4 + padding.Length + dataToEncrypt.Length];
@@ -443,31 +418,19 @@ namespace FileLocker
                 Buffer.BlockCopy(padding, 0, combined, offset, padding.Length);
                 offset += padding.Length;
                 Buffer.BlockCopy(dataToEncrypt, 0, combined, offset, dataToEncrypt.Length);
+
                 byte[] ciphertext = new byte[combined.Length];
                 byte[] tag = new byte[TAG_SIZE];
                 using (var aes = new AesGcm(key, TAG_SIZE))
                 {
                     aes.Encrypt(iv, combined, ciphertext, tag);
                 }
-                string encryptedPath;
-                if (scrambleNames)
-                {
-                    encryptedPath = GenerateObfuscatedFilename(filePath);
-                }
-                else
-                {
-                    string? directory = Path.GetDirectoryName(filePath);
-                    if (directory == null) throw new InvalidOperationException("File directory is null.");
-                    encryptedPath = Path.Combine(directory, originalFileName + ENCRYPTED_EXTENSION);
-                }
-                using (var fs = new FileStream(encryptedPath, FileMode.Create))
-                {
-                    fs.WriteByte(FORMAT_VERSION);
-                    fs.Write(salt, 0, salt.Length);
-                    fs.Write(iv, 0, iv.Length);
-                    fs.Write(tag, 0, tag.Length);
-                    fs.Write(ciphertext, 0, ciphertext.Length);
-                }
+
+                byte[] payload = BuildEncryptedPayload(salt, iv, tag, ciphertext);
+                string encryptedPath = BuildOutputPath(filePath, scrambleNames, useSteganography);
+                byte[] outputBytes = useSteganography ? EmbedInPngContainer(payload) : payload;
+
+                File.WriteAllBytes(encryptedPath, outputBytes);
                 File.SetCreationTime(encryptedPath, new DateTime(2020, 1, 1));
                 File.SetLastWriteTime(encryptedPath, new DateTime(2020, 1, 1));
                 SecureDelete(filePath);
@@ -480,23 +443,28 @@ namespace FileLocker
 
         private void DecryptFileAdvanced(string filePath, string password)
         {
-            using (var fs = new FileStream(filePath, FileMode.Open))
+            byte[] encryptedBytes = TryExtractStegoPayload(filePath) ?? File.ReadAllBytes(filePath);
+
+            using (var fs = new MemoryStream(encryptedBytes))
             {
                 byte version = (byte)fs.ReadByte();
                 if (version != FORMAT_VERSION)
                 {
                     throw new InvalidDataException("Unsupported file format version.");
                 }
+
                 byte[] salt = new byte[SALT_SIZE];
                 byte[] iv = new byte[IV_SIZE];
                 byte[] tag = new byte[TAG_SIZE];
                 ReadExact(fs, salt, 0, SALT_SIZE);
                 ReadExact(fs, iv, 0, IV_SIZE);
                 ReadExact(fs, tag, 0, TAG_SIZE);
+
                 byte[] ciphertext = new byte[fs.Length - 1 - SALT_SIZE - IV_SIZE - TAG_SIZE];
                 ReadExact(fs, ciphertext, 0, ciphertext.Length);
                 byte[] key = DeriveKeyArgon2(password, salt);
                 byte[] plaintext = new byte[ciphertext.Length];
+
                 using (var aes = new AesGcm(key, TAG_SIZE))
                 {
                     try
@@ -508,6 +476,7 @@ namespace FileLocker
                         throw new UnauthorizedAccessException("Invalid password or corrupted file.");
                     }
                 }
+
                 int offset = 0;
                 int metadataLength = BitConverter.ToInt32(plaintext, offset);
                 offset += 4;
@@ -523,6 +492,12 @@ namespace FileLocker
                 {
                     fileData = DecompressData(fileData);
                 }
+
+                if (metadata.ContentHash.Length > 0)
+                {
+                    EnsureHashMatch(metadata.ContentHash, fileData);
+                }
+
                 string? directory = Path.GetDirectoryName(filePath);
                 if (directory == null) throw new InvalidOperationException("File directory is null.");
                 string originalPath = Path.Combine(directory, metadata.OriginalFileName ?? "output");
@@ -539,7 +514,8 @@ namespace FileLocker
                 File.SetCreationTime(finalPath, metadata.CreationTime);
                 File.SetLastWriteTime(finalPath, metadata.LastWriteTime);
             }
-            File.Delete(filePath);
+
+            SecureDelete(filePath);
         }
 
         private string GenerateObfuscatedFilename(string originalPath)
@@ -572,15 +548,18 @@ namespace FileLocker
             }
         }
 
-        private byte[] CompressData(byte[] data)
+        private byte[] CompressData(byte[] data, out bool compressed)
         {
             using (var output = new MemoryStream())
             {
-                using (var gzip = new GZipStream(output, CompressionMode.Compress))
+                using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
                 {
                     gzip.Write(data, 0, data.Length);
                 }
-                return output.ToArray();
+
+                byte[] compressedBytes = output.ToArray();
+                compressed = compressedBytes.Length < data.Length - 16; // ensure compression was worthwhile
+                return compressed ? compressedBytes : data;
             }
         }
 
@@ -595,6 +574,126 @@ namespace FileLocker
             }
         }
 
+        private byte[] BuildEncryptedPayload(byte[] salt, byte[] iv, byte[] tag, byte[] ciphertext)
+        {
+            byte[] payload = new byte[1 + salt.Length + iv.Length + tag.Length + ciphertext.Length];
+            int offset = 0;
+            payload[offset++] = FORMAT_VERSION;
+            Buffer.BlockCopy(salt, 0, payload, offset, salt.Length);
+            offset += salt.Length;
+            Buffer.BlockCopy(iv, 0, payload, offset, iv.Length);
+            offset += iv.Length;
+            Buffer.BlockCopy(tag, 0, payload, offset, tag.Length);
+            offset += tag.Length;
+            Buffer.BlockCopy(ciphertext, 0, payload, offset, ciphertext.Length);
+            return payload;
+        }
+
+        private string BuildOutputPath(string filePath, bool scrambleNames, bool useSteganography)
+        {
+            string? directory = Path.GetDirectoryName(filePath) ?? throw new InvalidOperationException("File directory is null.");
+            string baseName = Path.GetFileName(filePath);
+
+            if (useSteganography)
+            {
+                string name = scrambleNames ? GenerateRandomString(12) : Path.GetFileNameWithoutExtension(baseName) + "_secure";
+                return Path.Combine(directory, name + ".png");
+            }
+
+            if (scrambleNames)
+            {
+                return GenerateObfuscatedFilename(filePath);
+            }
+
+            return Path.Combine(directory, baseName + ENCRYPTED_EXTENSION);
+        }
+
+        private byte[] EmbedInPngContainer(byte[] payload)
+        {
+            int iendIndex = FindIendChunkIndex(StegoCarrierPng);
+            if (iendIndex <= 0)
+            {
+                throw new InvalidDataException("Invalid PNG carrier for steganography mode.");
+            }
+
+            byte[] chunk = BuildCustomPngChunk(STEGO_CHUNK_TYPE, payload);
+            byte[] result = new byte[StegoCarrierPng.Length + chunk.Length];
+            Buffer.BlockCopy(StegoCarrierPng, 0, result, 0, iendIndex);
+            Buffer.BlockCopy(chunk, 0, result, iendIndex, chunk.Length);
+            Buffer.BlockCopy(StegoCarrierPng, iendIndex, result, iendIndex + chunk.Length, StegoCarrierPng.Length - iendIndex);
+            return result;
+        }
+
+        private byte[]? TryExtractStegoPayload(string filePath)
+        {
+            byte[] fileBytes = File.ReadAllBytes(filePath);
+            if (!IsPng(fileBytes))
+            {
+                return null;
+            }
+
+            int index = 8; // skip signature
+            while (index + 8 <= fileBytes.Length)
+            {
+                int length = BinaryPrimitives.ReadInt32BigEndian(fileBytes.AsSpan(index, 4));
+                string type = Encoding.ASCII.GetString(fileBytes, index + 4, 4);
+                int dataStart = index + 8;
+                if (length < 0 || dataStart + length + 4 > fileBytes.Length)
+                {
+                    break;
+                }
+                if (type == STEGO_CHUNK_TYPE)
+                {
+                    byte[] payload = new byte[length];
+                    Buffer.BlockCopy(fileBytes, dataStart, payload, 0, length);
+                    return payload;
+                }
+                index = dataStart + length + 4; // move past data and CRC
+            }
+
+            return null;
+        }
+
+        private static bool IsPng(ReadOnlySpan<byte> data)
+        {
+            byte[] signature = { 137, 80, 78, 71, 13, 10, 26, 10 };
+            return data.Length >= signature.Length && data.Slice(0, signature.Length).SequenceEqual(signature);
+        }
+
+        private int FindIendChunkIndex(byte[] png)
+        {
+            int index = 8; // skip signature
+            while (index + 8 <= png.Length)
+            {
+                int length = BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(index, 4));
+                string type = Encoding.ASCII.GetString(png, index + 4, 4);
+                if (type == "IEND")
+                {
+                    return index;
+                }
+
+                index += 8 + length + 4;
+            }
+
+            return -1;
+        }
+
+        private byte[] BuildCustomPngChunk(string type, byte[] data)
+        {
+            byte[] typeBytes = Encoding.ASCII.GetBytes(type);
+            byte[] chunk = new byte[4 + 4 + data.Length + 4];
+            BinaryPrimitives.WriteInt32BigEndian(chunk.AsSpan(0, 4), data.Length);
+            Buffer.BlockCopy(typeBytes, 0, chunk, 4, 4);
+            Buffer.BlockCopy(data, 0, chunk, 8, data.Length);
+
+            var crc = new Crc32();
+            crc.Append(typeBytes);
+            crc.Append(data);
+            byte[] crcBytes = crc.GetCurrentHash();
+            Buffer.BlockCopy(crcBytes, 0, chunk, 8 + data.Length, 4);
+            return chunk;
+        }
+
         private byte[] SerializeMetadata(FileMetadata metadata)
         {
             using (var stream = new MemoryStream())
@@ -605,6 +704,9 @@ namespace FileLocker
                 writer.Write(metadata.CreationTime.ToBinary());
                 writer.Write(metadata.LastWriteTime.ToBinary());
                 writer.Write(metadata.IsCompressed);
+                writer.Write(metadata.IsSteganographyContainer);
+                writer.Write(metadata.ContentHash.Length);
+                writer.Write(metadata.ContentHash);
                 return stream.ToArray();
             }
         }
@@ -614,7 +716,7 @@ namespace FileLocker
             using (var stream = new MemoryStream(data))
             using (var reader = new BinaryReader(stream))
             {
-                return new FileMetadata
+                var metadata = new FileMetadata
                 {
                     OriginalFileName = reader.ReadString(),
                     OriginalSize = reader.ReadInt64(),
@@ -622,6 +724,22 @@ namespace FileLocker
                     LastWriteTime = DateTime.FromBinary(reader.ReadInt64()),
                     IsCompressed = reader.ReadBoolean()
                 };
+
+                if (stream.Position < stream.Length)
+                {
+                    metadata.IsSteganographyContainer = reader.ReadBoolean();
+                }
+
+                if (stream.Position < stream.Length)
+                {
+                    int hashLength = reader.ReadInt32();
+                    if (hashLength > 0 && hashLength <= stream.Length - stream.Position)
+                    {
+                        metadata.ContentHash = reader.ReadBytes(hashLength);
+                    }
+                }
+
+                return metadata;
             }
         }
 
@@ -642,6 +760,20 @@ namespace FileLocker
             using (var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 120000, HashAlgorithmName.SHA256))
             {
                 return pbkdf2.GetBytes(KEY_SIZE);
+            }
+        }
+
+        private byte[] ComputeSha256(byte[] data)
+        {
+            return SHA256.HashData(data);
+        }
+
+        private void EnsureHashMatch(byte[] expectedHash, byte[] data)
+        {
+            byte[] actualHash = ComputeSha256(data);
+            if (!actualHash.SequenceEqual(expectedHash))
+            {
+                throw new UnauthorizedAccessException("File failed integrity validation after decryption.");
             }
         }
 
@@ -712,6 +844,8 @@ namespace FileLocker
             public DateTime CreationTime { get; set; }
             public DateTime LastWriteTime { get; set; }
             public bool IsCompressed { get; set; }
+            public bool IsSteganographyContainer { get; set; }
+            public byte[] ContentHash { get; set; } = Array.Empty<byte>();
         }
 
         // --- Dialog Helpers ---

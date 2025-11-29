@@ -180,22 +180,11 @@
                             Text="At least 6 characters recommended" />
                     </StackPanel>
                     <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
                         <PasswordBox
                             x:Name="PasswordBox"
-                            Grid.Column="0"
                             Margin="0,0,10,0"
-                            PasswordChanged="PasswordBox_PasswordChanged" />
-                        <CheckBox
-                            x:Name="ShowPasswordCheckBox"
-                            Grid.Column="1"
-                            VerticalAlignment="Center"
-                            Checked="ShowPasswordCheckBox_Checked"
-                            Content="Show"
-                            Unchecked="ShowPasswordCheckBox_Unchecked" />
+                            PasswordChanged="PasswordBox_PasswordChanged"
+                            PasswordRevealMode="Hidden" />
                     </Grid>
                     <ProgressBar
                         x:Name="PasswordStrengthBar"
