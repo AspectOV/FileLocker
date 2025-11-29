@@ -1,4 +1,6 @@
+using Microsoft.UI;
 using Microsoft.UI.Text;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -16,7 +18,6 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
-using Windows.UI;
 using WinRT.Interop;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -42,18 +43,22 @@ namespace FileLocker
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=");
 
         private List<string> selectedPaths = new List<string>();
-        private readonly Updater _updater = new Updater();
+        private readonly Updater _updater = new();
         private bool isDarkTheme = true;
         public ObservableCollection<string> FileList { get; set; } = new();
         public string StatusText { get; set; } = "Ready - Add files to begin";
-        private TextBlock DropLabelControler;
+        private TextBlock? DropLabelControler;
+        private AppWindow? _appWindow;
 
         // Advanced options properties
         public bool IsCompressModeEnabled { get; set; } = true;
         public bool IsScrambleNamesEnabled { get; set; } = false;
         public bool IsSteganographyEnabled { get; set; } = false;
 
-        private record struct PasswordStrengthResult(int Score, string Feedback, Color BarColor);
+        private record struct PasswordStrengthResult(
+            int Score,
+            string Feedback,
+            Windows.UI.Color BarColor);
 
         public MainWindow()
         {
@@ -65,11 +70,19 @@ namespace FileLocker
             UpdateStatusLabel();
 
             // Set window size to 600x800
-            this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 600, 800));
+            InitializeAppWindow();
 
             // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
             DropLabelControler = DropLabel;
 
+        }
+
+        private void InitializeAppWindow()
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+            _appWindow = AppWindow.GetFromWindowId(windowId);
+            _appWindow?.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 600, 800));
         }
 
         private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
@@ -523,8 +536,9 @@ namespace FileLocker
 
         private string GenerateObfuscatedFilename(string originalPath)
         {
-            string directory = Path.GetDirectoryName(originalPath);
-            if (directory == null) throw new InvalidOperationException("File directory is null.");
+            string? directory = Path.GetDirectoryName(originalPath);
+            if (directory == null) 
+                throw new InvalidOperationException("File directory is null.");
             string randomName = GenerateRandomString(16) + ENCRYPTED_EXTENSION;
             return Path.Combine(directory, randomName);
         }
