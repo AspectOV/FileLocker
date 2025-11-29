@@ -1,25 +1,37 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using Microsoft.Win32;
-using System.Windows.Media.Animation;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Navigation;
+using Windows.Foundation;
+using Windows.Foundation.Collections;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.ApplicationModel.DataTransfer;
+using Microsoft.UI.Xaml.Media.Animation;
+using WinRT.Interop;
+using Microsoft.UI.Text;
+
+// To learn more about WinUI, the WinUI project structure,
+// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace FileLocker
 {
     /// <summary>
-    /// Interaction logic for MainWindow.xaml
+    /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public partial class MainWindow : Window
+    public sealed partial class MainWindow : Window
     {
         private const string ENCRYPTED_EXTENSION = ".locked";
         private const int SALT_SIZE = 32;
@@ -31,21 +43,37 @@ namespace FileLocker
         private const int MAX_PADDING_SIZE = 8192; // Maximum padding
 
         private List<string> selectedPaths = new List<string>();
-        private Updater updater;
+        private readonly Updater _updater = new Updater();
         private bool isDarkTheme = true;
-        public System.Collections.ObjectModel.ObservableCollection<string> FileList { get; set; } = new();
+        public ObservableCollection<string> FileList { get; set; } = new();
         public string StatusText { get; set; } = "Ready - Add files to begin";
+        private TextBlock DropLabelControler;
+
+        // Advanced options properties
+        public bool IsCompressModeEnabled { get; set; } = true;
+        public bool IsScrambleNamesEnabled { get; set; } = false;
+        public bool IsSteganographyEnabled { get; set; } = false;
+
         private TextBox plainTextPasswordBox;
 
         public MainWindow()
         {
             InitializeComponent();
-            updater = new Updater();
-            DataContext = this;
+            _updater.SetXamlRoot(this.Content.XamlRoot); // Set XamlRoot for dialogs
+            FileListBox.ItemsSource = FileList;
             isDarkTheme = true;
-            ApplyTheme();
             ThemeToggleButton.Content = "☀️";
             UpdateStatusLabel();
+
+            // Set window size to 600x800
+            this.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(100, 100, 600, 800));
+
+            // Initialize DropLabelControl
+            DropLabelControler = new TextBlock
+            {
+                Text = "📁 Drag files here or click to browse",
+                FontWeight = FontWeights.Normal
+            };
 
             // Create the plain text password TextBox (hidden by default)
             plainTextPasswordBox = new TextBox
@@ -57,6 +85,7 @@ namespace FileLocker
                 VerticalAlignment = PasswordBox.VerticalAlignment,
                 HorizontalAlignment = PasswordBox.HorizontalAlignment
             };
+
             // Insert after PasswordBox in the parent StackPanel
             var parent = PasswordBox.Parent as Panel;
             if (parent != null)
@@ -69,82 +98,96 @@ namespace FileLocker
 
         private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
         {
-            isDarkTheme = !isDarkTheme;
-            ApplyTheme();
-            ThemeToggleButton.Content = isDarkTheme ? "🌙" : "☀️";
-        }
-
-        private void ApplyTheme()
-        {
-            var dict = Application.Current.Resources.MergedDictionaries.FirstOrDefault(x => x.Source != null && x.Source.OriginalString.Contains("Themes/Styles.xaml"));
-            if (dict != null)
+            if (ThemeToggleButton is Button button)
             {
-                dict["BackgroundBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDarkTheme ? "#FF1E1E1E" : "#FFF9F9F9"));
-                dict["ForegroundBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDarkTheme ? "#FFF3F3F3" : "#FF222222"));
-                dict["AccentBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDarkTheme ? "#FF888EA8" : "#FF888EA8"));
-                dict["PanelBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDarkTheme ? "#FF232323" : "#FFFFFFFF"));
-                dict["ErrorBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDarkTheme ? "#FFCF6679" : "#FFB00020"));
-                dict["SuccessBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(isDarkTheme ? "#FF27AE60" : "#FF2ECC71"));
+                isDarkTheme = !isDarkTheme;
+                button.Content = isDarkTheme ? "🌙" : "☀️";
             }
         }
 
         // --- Drag & Drop ---
-        private void DropPanel_DragEnter(object sender, DragEventArgs e)
+        private void DropPanel_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
             {
-                e.Effects = DragDropEffects.Copy;
+                e.AcceptedOperation = DataPackageOperation.Copy;
                 AnimateDropPanel(true);
-                DropLabel.Text = "🟢 Release to add files";
-                DropLabel.FontWeight = FontWeights.Bold;
+                DropLabelControler.Text = "🟢 Release to add files";
+                DropLabelControler.FontWeight = FontWeights.Bold;
             }
         }
 
-        private void DropPanel_DragLeave(object sender, DragEventArgs e)
+        private async void DropPanel_Drop(object sender, DragEventArgs e)
         {
             AnimateDropPanel(false);
-            DropLabel.Text = "📁 Drag files here or click to browse";
-            DropLabel.FontWeight = FontWeights.Normal;
+            DropLabelControler.Text = "📁 Drag files here or click to browse";
+            DropLabelControler.FontWeight = FontWeights.Normal;
+
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                await ProcessDroppedFilesAsync(e.DataView);
+            }
         }
 
-        private void DropPanel_Drop(object sender, DragEventArgs e)
+        private async Task ProcessDroppedFilesAsync(DataPackageView dataView)
         {
-            AnimateDropPanel(false);
-            DropLabel.Text = "📁 Drag files here or click to browse";
-            DropLabel.FontWeight = FontWeights.Normal;
-
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            try
             {
-                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-                if (files != null && files.Length > 0)
+                var items = await dataView.GetStorageItemsAsync();
+                var files = new List<string>();
+                
+                foreach (var item in items)
                 {
-                    AddFilesToList(files);
-                    SetStatus($"Added {files.Length} file(s)");
+                    if (item is StorageFile file)
+                    {
+                        files.Add(file.Path);
+                    }
+                    else if (item is StorageFolder folder)
+                    {
+                        files.Add(folder.Path);
+                    }
+                }
+
+                if (files.Count > 0)
+                {
+                    AddFilesToList(files.ToArray());
+                    SetStatus($"Added {files.Count} file(s)");
                 }
             }
-        }
-
-        private void DropPanel_Click(object sender, MouseButtonEventArgs e)
-        {
-            BrowseFiles();
-        }
-
-        private void BrowseFiles()
-        {
-            var dialog = new OpenFileDialog
+            catch (Exception ex)
             {
-                Multiselect = true,
-                Filter = "All Files (*.*)|*.*|Documents (*.doc;*.docx;*.pdf)|*.doc;*.docx;*.pdf|Images (*.jpg;*.png;*.bmp)|*.jpg;*.png;*.bmp",
-                Title = "Select Files to Encrypt/Decrypt",
-                CheckFileExists = true,
-                CheckPathExists = true
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                AddFilesToList(dialog.FileNames);
-                SetStatus($"Added {dialog.FileNames.Length} file(s)");
+                await ShowErrorDialogAsync($"Error processing dropped files: {ex.Message}");
             }
+        }
+
+        private void DropPanel_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            _ = BrowseFiles();
+        }
+
+        private async Task BrowseFiles()
+        {
+            var picker = new FileOpenPicker();
+            
+            // Initialize the picker with the window handle
+            var hwnd = WindowNative.GetWindowHandle(this);
+            InitializeWithWindow.Initialize(picker, hwnd);
+            
+            picker.FileTypeFilter.Add("*");
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+
+            var files = await picker.PickMultipleFilesAsync();
+            if (files.Count > 0)
+            {
+                var filePaths = files.Select(f => f.Path).ToArray();
+                AddFilesToList(filePaths);
+                SetStatus($"Added {filePaths.Length} file(s)");
+            }
+        }
+
+        private async void BrowseFiles_Click(object sender, RoutedEventArgs e)
+        {
+            await BrowseFiles();
         }
 
         // --- File List and Status Binding ---
@@ -155,7 +198,7 @@ namespace FileLocker
                 if (!selectedPaths.Contains(path))
                 {
                     selectedPaths.Add(path);
-                    string displayName = System.IO.Path.GetFileName(path);
+                    string displayName = Path.GetFileName(path);
                     if (Directory.Exists(path))
                         displayName += " (Folder)";
                     if (File.Exists(path))
@@ -193,20 +236,6 @@ namespace FileLocker
         {
             StatusText = text;
             StatusLabel.Text = text;
-            // Animate status label color for feedback
-            var anim = new ColorAnimation((Color)ColorConverter.ConvertFromString("#FF888EA8"), TimeSpan.FromMilliseconds(200));
-            var oldBrush = StatusLabel.Foreground as SolidColorBrush;
-            SolidColorBrush brush;
-            if (oldBrush == null || oldBrush.IsFrozen)
-            {
-                brush = new SolidColorBrush(oldBrush != null ? oldBrush.Color : (Color)ColorConverter.ConvertFromString("#FFF3F3F3"));
-                StatusLabel.Foreground = brush;
-            }
-            else
-            {
-                brush = oldBrush;
-            }
-            brush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
         }
 
         private void UpdateStatusLabel()
@@ -225,6 +254,7 @@ namespace FileLocker
             plainTextPasswordBox.Visibility = Visibility.Visible;
             PasswordBox.Visibility = Visibility.Collapsed;
         }
+
         private void ShowPasswordCheckBox_Unchecked(object sender, RoutedEventArgs e)
         {
             // Hide plain text
@@ -232,28 +262,33 @@ namespace FileLocker
             plainTextPasswordBox.Visibility = Visibility.Collapsed;
             PasswordBox.Visibility = Visibility.Visible;
         }
+
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
         {
-            if (ShowPasswordCheckBox.IsChecked == true)
+            // Sync with plain text box if it's visible
+            if (plainTextPasswordBox.Visibility == Visibility.Visible)
             {
                 plainTextPasswordBox.Text = PasswordBox.Password;
             }
+
+            // Update password strength
             int strength = CalculatePasswordStrength(PasswordBox.Password);
-            StrengthBar.Value = strength;
+            PasswordStrengthBar.Value = strength;
+            
             if (strength < 30)
             {
-                StrengthLabel.Text = "Weak Password";
-                StrengthLabel.Foreground = System.Windows.Media.Brushes.Red;
+                PasswordStrengthText.Text = "Weak";
+                PasswordStrengthBar.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
             }
             else if (strength < 70)
             {
-                StrengthLabel.Text = "Good Password";
-                StrengthLabel.Foreground = System.Windows.Media.Brushes.Orange;
+                PasswordStrengthText.Text = "Medium";
+                PasswordStrengthBar.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Orange);
             }
             else
             {
-                StrengthLabel.Text = "Strong Password!";
-                StrengthLabel.Foreground = System.Windows.Media.Brushes.Green;
+                PasswordStrengthText.Text = "Strong";
+                PasswordStrengthBar.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Green);
             }
         }
 
@@ -291,168 +326,161 @@ namespace FileLocker
             if (!ValidateInput()) return;
             await ProcessFilesAsync(true);
         }
+
         private async void DecryptButton_Click(object sender, RoutedEventArgs e)
         {
             if (!ValidateInput()) return;
             await ProcessFilesAsync(false);
         }
+
         private bool ValidateInput()
         {
             if (selectedPaths.Count == 0)
             {
-                MessageBox.Show("Please select files or folders to process.", "No Files Selected", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _ = ShowErrorDialogAsync("Please select files or folders to process.");
                 return false;
             }
             if (string.IsNullOrWhiteSpace(PasswordBox.Password))
             {
-                MessageBox.Show("Please enter a password.", "Password Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _ = ShowErrorDialogAsync("Please enter a password.");
                 return false;
             }
             if (PasswordBox.Password.Length < 6)
             {
-                var result = MessageBox.Show("Password is very weak. Continue anyway?", "Weak Password", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (result != MessageBoxResult.Yes) return false;
+                _ = ShowConfirmDialogAsync("Password is very weak. Continue anyway?", "Weak Password");
+                return false;
             }
             return true;
         }
+
         private async Task ProcessFilesAsync(bool encrypt)
         {
-            SetUIEnabled(false);
-            MainProgressBar.Visibility = Visibility.Visible;
-            MainProgressBar.Value = 0;
-            var allFiles = new List<string>();
-            foreach (string path in selectedPaths)
+            try
             {
-                if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+                SetUIEnabled(false);
+                
+                // Capture password on UI thread before starting background tasks
+                string password = PasswordBox.Password;
+                
+                var allFiles = selectedPaths.ToList();
+                int processed = 0;
+                
+                foreach (string filePath in allFiles)
                 {
-                    allFiles.AddRange(Directory.GetFiles(path, "*", SearchOption.AllDirectories));
-                }
-                else if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                {
-                    allFiles.Add(path);
-                }
-            }
-            MainProgressBar.Maximum = allFiles.Count;
-            int processed = 0;
-            int successful = 0;
-            foreach (string filePath in allFiles)
-            {
-                try
-                {
-                    string fileName = System.IO.Path.GetFileName(filePath);
-                    SetStatus($"Processing: {fileName}");
-                    await Task.Delay(10); // Let UI update
-                    if (encrypt)
+                    try
                     {
-                        if (!filePath.EndsWith(ENCRYPTED_EXTENSION))
+                        if (encrypt)
                         {
-                            await Task.Run(() => EncryptFileAdvanced(filePath, PasswordBox.Password));
-                            successful++;
+                            await Task.Run(() => EncryptFileAdvanced(filePath, password));
                         }
+                        else
+                        {
+                            await Task.Run(() => DecryptFileAdvanced(filePath, password));
+                        }
+                        
+                        processed++;
+                        SetStatus($"Processed {processed}/{allFiles.Count} files...");
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        if (filePath.EndsWith(ENCRYPTED_EXTENSION))
-                        {
-                            await Task.Run(() => DecryptFileAdvanced(filePath, PasswordBox.Password));
-                            successful++;
-                        }
+                        await ShowErrorDialogAsync($"Error processing {Path.GetFileName(filePath)}: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    string fileName = System.IO.Path.GetFileName(filePath);
-                    MessageBox.Show($"Error processing {fileName}: {ex.Message}", "Processing Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                processed++;
-                MainProgressBar.Value = processed;
-            }
-            MainProgressBar.Visibility = Visibility.Collapsed;
-            SetUIEnabled(true);
-            string operation = encrypt ? "encrypted" : "decrypted";
-            SetStatus($"Complete: {successful} files {operation} successfully.");
-            MessageBox.Show($"Operation completed successfully!\n{successful} files {operation}.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-            if (successful > 0)
-            {
+                
+                SetStatus($"Completed! Processed {processed} files.");
+                
+                // Clear the list after successful processing
                 selectedPaths.Clear();
                 FileList.Clear();
                 UpdateStatusLabel();
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync($"Error: {ex.Message}");
+            }
+            finally
+            {
+                SetUIEnabled(true);
             }
         }
 
         // --- Encryption/Decryption Logic ---
         private void EncryptFileAdvanced(string filePath, string password)
         {
-            bool isCompressed = false;
-            bool scrambleNames = false;
-            Dispatcher.Invoke(() => {
-                isCompressed = CompressionCheckBox.IsChecked == true;
-                scrambleNames = ScrambleNamesCheckBox.IsChecked == true;
-            });
-            byte[] salt = GenerateRandomBytes(SALT_SIZE);
-            byte[] iv = GenerateRandomBytes(IV_SIZE);
-            byte[] key = DeriveKeyArgon2(password, salt);
-            byte[] fileData = File.ReadAllBytes(filePath);
-            string originalFileName = System.IO.Path.GetFileName(filePath) ?? string.Empty;
-            FileMetadata metadata = new FileMetadata
+            try
             {
-                OriginalFileName = originalFileName,
-                OriginalSize = fileData.Length,
-                CreationTime = File.GetCreationTime(filePath),
-                LastWriteTime = File.GetLastWriteTime(filePath),
-                IsCompressed = isCompressed
-            };
-            byte[] dataToEncrypt;
-            if (isCompressed)
-            {
-                dataToEncrypt = CompressData(fileData);
+                bool isCompressed = IsCompressModeEnabled;
+                bool scrambleNames = IsScrambleNamesEnabled;
+                byte[] salt = GenerateRandomBytes(SALT_SIZE);
+                byte[] iv = GenerateRandomBytes(IV_SIZE);
+                byte[] key = DeriveKeyArgon2(password, salt);
+                byte[] fileData = File.ReadAllBytes(filePath);
+                string originalFileName = Path.GetFileName(filePath) ?? string.Empty;
+                FileMetadata metadata = new FileMetadata
+                {
+                    OriginalFileName = originalFileName,
+                    OriginalSize = fileData.Length,
+                    CreationTime = File.GetCreationTime(filePath),
+                    LastWriteTime = File.GetLastWriteTime(filePath),
+                    IsCompressed = isCompressed
+                };
+                byte[] dataToEncrypt;
+                if (isCompressed)
+                {
+                    dataToEncrypt = CompressData(fileData);
+                }
+                else
+                {
+                    dataToEncrypt = fileData;
+                }
+                byte[] padding = GenerateRandomBytes(GenerateRandomPaddingSize());
+                byte[] metadataBytes = SerializeMetadata(metadata);
+                byte[] combined = new byte[4 + metadataBytes.Length + 4 + padding.Length + dataToEncrypt.Length];
+                int offset = 0;
+                Buffer.BlockCopy(BitConverter.GetBytes(metadataBytes.Length), 0, combined, offset, 4);
+                offset += 4;
+                Buffer.BlockCopy(metadataBytes, 0, combined, offset, metadataBytes.Length);
+                offset += metadataBytes.Length;
+                Buffer.BlockCopy(BitConverter.GetBytes(padding.Length), 0, combined, offset, 4);
+                offset += 4;
+                Buffer.BlockCopy(padding, 0, combined, offset, padding.Length);
+                offset += padding.Length;
+                Buffer.BlockCopy(dataToEncrypt, 0, combined, offset, dataToEncrypt.Length);
+                byte[] ciphertext = new byte[combined.Length];
+                byte[] tag = new byte[TAG_SIZE];
+                using (var aes = new AesGcm(key, TAG_SIZE))
+                {
+                    aes.Encrypt(iv, combined, ciphertext, tag);
+                }
+                string encryptedPath;
+                if (scrambleNames)
+                {
+                    encryptedPath = GenerateObfuscatedFilename(filePath);
+                }
+                else
+                {
+                    string? directory = Path.GetDirectoryName(filePath);
+                    if (directory == null) throw new InvalidOperationException("File directory is null.");
+                    encryptedPath = Path.Combine(directory, originalFileName + ENCRYPTED_EXTENSION);
+                }
+                using (var fs = new FileStream(encryptedPath, FileMode.Create))
+                {
+                    fs.WriteByte(FORMAT_VERSION);
+                    fs.Write(salt, 0, salt.Length);
+                    fs.Write(iv, 0, iv.Length);
+                    fs.Write(tag, 0, tag.Length);
+                    fs.Write(ciphertext, 0, ciphertext.Length);
+                }
+                File.SetCreationTime(encryptedPath, new DateTime(2020, 1, 1));
+                File.SetLastWriteTime(encryptedPath, new DateTime(2020, 1, 1));
+                SecureDelete(filePath);
             }
-            else
+            catch (Exception ex)
             {
-                dataToEncrypt = fileData;
+                throw new Exception($"Encryption failed: {ex.Message}");
             }
-            byte[] padding = GenerateRandomBytes(GenerateRandomPaddingSize());
-            byte[] metadataBytes = SerializeMetadata(metadata);
-            byte[] combined = new byte[4 + metadataBytes.Length + 4 + padding.Length + dataToEncrypt.Length];
-            int offset = 0;
-            Buffer.BlockCopy(BitConverter.GetBytes(metadataBytes.Length), 0, combined, offset, 4);
-            offset += 4;
-            Buffer.BlockCopy(metadataBytes, 0, combined, offset, metadataBytes.Length);
-            offset += metadataBytes.Length;
-            Buffer.BlockCopy(BitConverter.GetBytes(padding.Length), 0, combined, offset, 4);
-            offset += 4;
-            Buffer.BlockCopy(padding, 0, combined, offset, padding.Length);
-            offset += padding.Length;
-            Buffer.BlockCopy(dataToEncrypt, 0, combined, offset, dataToEncrypt.Length);
-            byte[] ciphertext = new byte[combined.Length];
-            byte[] tag = new byte[TAG_SIZE];
-            using (var aes = new AesGcm(key, TAG_SIZE))
-            {
-                aes.Encrypt(iv, combined, ciphertext, tag);
-            }
-            string encryptedPath;
-            if (scrambleNames)
-            {
-                encryptedPath = GenerateObfuscatedFilename(filePath);
-            }
-            else
-            {
-                string? directory = System.IO.Path.GetDirectoryName(filePath);
-                if (directory == null) throw new InvalidOperationException("File directory is null.");
-                encryptedPath = System.IO.Path.Combine(directory, originalFileName + ENCRYPTED_EXTENSION);
-            }
-            using (var fs = new FileStream(encryptedPath, FileMode.Create))
-            {
-                fs.WriteByte(FORMAT_VERSION);
-                fs.Write(salt, 0, salt.Length);
-                fs.Write(iv, 0, iv.Length);
-                fs.Write(tag, 0, tag.Length);
-                fs.Write(ciphertext, 0, ciphertext.Length);
-            }
-            File.SetCreationTime(encryptedPath, new DateTime(2020, 1, 1));
-            File.SetLastWriteTime(encryptedPath, new DateTime(2020, 1, 1));
-            SecureDelete(filePath);
         }
+
         private void DecryptFileAdvanced(string filePath, string password)
         {
             using (var fs = new FileStream(filePath, FileMode.Open))
@@ -498,16 +526,16 @@ namespace FileLocker
                 {
                     fileData = DecompressData(fileData);
                 }
-                string? directory = System.IO.Path.GetDirectoryName(filePath);
+                string? directory = Path.GetDirectoryName(filePath);
                 if (directory == null) throw new InvalidOperationException("File directory is null.");
-                string originalPath = System.IO.Path.Combine(directory, metadata.OriginalFileName ?? "output");
+                string originalPath = Path.Combine(directory, metadata.OriginalFileName ?? "output");
                 int counter = 1;
                 string finalPath = originalPath;
                 while (File.Exists(finalPath))
                 {
-                    string name = System.IO.Path.GetFileNameWithoutExtension(originalPath);
-                    string ext = System.IO.Path.GetExtension(originalPath);
-                    finalPath = System.IO.Path.Combine(directory, $"{name}_{counter}{ext}");
+                    string name = Path.GetFileNameWithoutExtension(originalPath);
+                    string ext = Path.GetExtension(originalPath);
+                    finalPath = Path.Combine(directory, $"{name}_{counter}{ext}");
                     counter++;
                 }
                 File.WriteAllBytes(finalPath, fileData);
@@ -516,13 +544,15 @@ namespace FileLocker
             }
             File.Delete(filePath);
         }
+
         private string GenerateObfuscatedFilename(string originalPath)
         {
-            string directory = System.IO.Path.GetDirectoryName(originalPath);
+            string directory = Path.GetDirectoryName(originalPath);
             if (directory == null) throw new InvalidOperationException("File directory is null.");
             string randomName = GenerateRandomString(16) + ENCRYPTED_EXTENSION;
-            return System.IO.Path.Combine(directory, randomName);
+            return Path.Combine(directory, randomName);
         }
+
         private string GenerateRandomString(int length)
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -533,6 +563,7 @@ namespace FileLocker
             }
             return new string(random.Select(b => chars[b % chars.Length]).ToArray());
         }
+
         private int GenerateRandomPaddingSize()
         {
             using (var rng = RandomNumberGenerator.Create())
@@ -543,6 +574,7 @@ namespace FileLocker
                 return MIN_PADDING_SIZE + (Math.Abs(random) % (MAX_PADDING_SIZE - MIN_PADDING_SIZE));
             }
         }
+
         private byte[] CompressData(byte[] data)
         {
             using (var output = new MemoryStream())
@@ -554,6 +586,7 @@ namespace FileLocker
                 return output.ToArray();
             }
         }
+
         private byte[] DecompressData(byte[] compressedData)
         {
             using (var input = new MemoryStream(compressedData))
@@ -564,6 +597,7 @@ namespace FileLocker
                 return output.ToArray();
             }
         }
+
         private byte[] SerializeMetadata(FileMetadata metadata)
         {
             using (var stream = new MemoryStream())
@@ -577,6 +611,7 @@ namespace FileLocker
                 return stream.ToArray();
             }
         }
+
         private FileMetadata DeserializeMetadata(byte[] data)
         {
             using (var stream = new MemoryStream(data))
@@ -592,6 +627,7 @@ namespace FileLocker
                 };
             }
         }
+
         private byte[] GenerateRandomBytes(int size)
         {
             byte[] bytes = new byte[size];
@@ -601,6 +637,7 @@ namespace FileLocker
             }
             return bytes;
         }
+
         private byte[] DeriveKeyArgon2(string password, byte[] salt)
         {
             // Using PBKDF2 as Argon2 requires additional NuGet package
@@ -610,6 +647,7 @@ namespace FileLocker
                 return pbkdf2.GetBytes(KEY_SIZE);
             }
         }
+
         private void SecureDelete(string filePath)
         {
             try
@@ -640,6 +678,7 @@ namespace FileLocker
                 try { File.Delete(filePath); } catch { }
             }
         }
+
         private static void ReadExact(FileStream fs, byte[] buffer, int offset, int count)
         {
             int readTotal = 0;
@@ -650,34 +689,25 @@ namespace FileLocker
                 readTotal += read;
             }
         }
+
         private void SetUIEnabled(bool enabled)
         {
             EncryptButton.IsEnabled = enabled;
             DecryptButton.IsEnabled = enabled;
             PasswordBox.IsEnabled = enabled;
             ClearListButton.IsEnabled = enabled;
-            CompressionCheckBox.IsEnabled = enabled;
-            SteganographyCheckBox.IsEnabled = enabled;
-            ScrambleNamesCheckBox.IsEnabled = enabled;
             DropPanel.AllowDrop = enabled;
         }
+
         private void AnimateDropPanel(bool highlight)
         {
-            var color = (Color)ColorConverter.ConvertFromString(highlight ? (isDarkTheme ? "#FF232323" : "#E8F4FD") : (isDarkTheme ? "#FF232323" : "#FFFFFFFF"));
-            var anim = new ColorAnimation(color, TimeSpan.FromMilliseconds(200));
-            var oldBrush = DropPanel.Background as SolidColorBrush;
-            SolidColorBrush brush;
-            if (oldBrush == null || oldBrush.IsFrozen)
-            {
-                brush = new SolidColorBrush(oldBrush != null ? oldBrush.Color : color);
-                DropPanel.Background = brush;
-            }
-            else
-            {
-                brush = oldBrush;
-            }
-            brush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+            // Simple animation for drop panel
+            var color = highlight ? 
+                new SolidColorBrush(Microsoft.UI.Colors.LightGreen) : 
+                new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            DropPanel.Background = color;
         }
+
         private class FileMetadata
         {
             public string OriginalFileName { get; set; } = string.Empty;
@@ -687,37 +717,131 @@ namespace FileLocker
             public bool IsCompressed { get; set; }
         }
 
-        private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+        // --- Dialog Helpers ---
+        private async Task ShowErrorDialogAsync(string message)
         {
-            await updater.CheckForUpdatesAsync(false);
+            var dialog = new ContentDialog
+            {
+                Title = "Error",
+                Content = message,
+                PrimaryButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
         }
 
-        private void About_Click(object sender, RoutedEventArgs e)
+        private async Task ShowInfoDialogAsync(string message, string title)
         {
-            MessageBox.Show("FileLocker WPF\nA secure file encryption tool using AES-256-GCM encryption.\n\n© 2025 Jeremy Hayes", "About FileLocker");
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = message,
+                PrimaryButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+
+        private async Task<bool> ShowConfirmDialogAsync(string message, string title)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = message,
+                PrimaryButtonText = "Yes",
+                SecondaryButtonText = "No",
+                XamlRoot = Content.XamlRoot
+            };
+            var result = await dialog.ShowAsync();
+            return result == ContentDialogResult.Primary;
+        }
+
+        // --- Window Controls ---
+        private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            _updater.SetXamlRoot(this.Content.XamlRoot); // Ensure XamlRoot is set before showing dialogs
+            await _updater.CheckForUpdatesAsync();
+        }
+
+        private async void About_Click(object sender, RoutedEventArgs e)
+        {
+            await ShowInfoDialogAsync("FileLocker WinUI 3\nA secure file encryption tool using AES-256-GCM encryption.\n\n© 2025 Jeremy Hayes", "About FileLocker");
         }
 
         private void Minimize_Click(object sender, RoutedEventArgs e)
         {
-            WindowState = WindowState.Minimized;
+            // Minimize window
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            ShowWindow(hwnd, 2); // SW_MINIMIZE
         }
+
         private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
         {
-            if (WindowState == WindowState.Maximized)
-                WindowState = WindowState.Normal;
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var placement = GetWindowPlacement(hwnd);
+            if (placement.showCmd == 3) // SW_MAXIMIZE
+            {
+                ShowWindow(hwnd, 9); // SW_RESTORE
+            }
             else
-                WindowState = WindowState.Maximized;
+            {
+                ShowWindow(hwnd, 3); // SW_MAXIMIZE
+            }
         }
+
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             Close();
         }
 
-        private void TopBar_MouseDown(object sender, MouseButtonEventArgs e)
+        // P/Invoke for window controls
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl);
+
+        private WINDOWPLACEMENT GetWindowPlacement(IntPtr hwnd)
         {
-            if (e.ChangedButton == MouseButton.Left)
+            WINDOWPLACEMENT placement = new WINDOWPLACEMENT();
+            placement.length = System.Runtime.InteropServices.Marshal.SizeOf(placement);
+            GetWindowPlacement(hwnd, ref placement);
+            return placement;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct WINDOWPLACEMENT
+        {
+            public int length;
+            public int flags;
+            public int showCmd;
+            public System.Drawing.Point ptMinPosition;
+            public System.Drawing.Point ptMaxPosition;
+            public System.Drawing.Rectangle rcNormalPosition;
+        }
+
+        // Advanced options event handlers
+        private void CompressModeToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (sender is ToggleSwitch toggleSwitch)
             {
-                try { DragMove(); } catch { }
+                IsCompressModeEnabled = toggleSwitch.IsOn;
+            }
+        }
+
+        private void ScrambleNamesToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (sender is ToggleSwitch toggleSwitch)
+            {
+                IsScrambleNamesEnabled = toggleSwitch.IsOn;
+            }
+        }
+
+        private void SteganographyToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (sender is ToggleSwitch toggleSwitch)
+            {
+                IsSteganographyEnabled = toggleSwitch.IsOn;
             }
         }
     }
