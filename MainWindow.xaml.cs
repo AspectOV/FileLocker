@@ -52,17 +52,17 @@ namespace FileLocker
         private XamlRoot _xamlRoot;
 
         // UI element references (resolved after InitializeComponent)
-        private ListView FileListBox { get; }
-        private Button ThemeToggleButton { get; }
-        private TextBlock DropLabel { get; }
-        private TextBlock StatusLabel { get; }
-        private PasswordBox PasswordBox { get; }
-        private ProgressBar PasswordStrengthBar { get; }
-        private TextBlock PasswordStrengthText { get; }
-        private Button EncryptButton { get; }
-        private Button DecryptButton { get; }
-        private Button ClearListButton { get; }
-        private Border DropPanel { get; }
+        private ListView _fileListBox = null!;
+        private Button _themeToggleButton = null!;
+        private TextBlock _dropLabel = null!;
+        private TextBlock _statusLabel = null!;
+        private PasswordBox _passwordBox = null!;
+        private ProgressBar _passwordStrengthBar = null!;
+        private TextBlock _passwordStrengthText = null!;
+        private Button _encryptButton = null!;
+        private Button _decryptButton = null!;
+        private Button _clearListButton = null!;
+        private Border _dropPanel = null!;
 
         // Advanced options properties
         public bool IsCompressModeEnabled { get; set; } = true;
@@ -79,29 +79,29 @@ namespace FileLocker
             InitializeComponent();
             var root = Content as FrameworkElement ?? throw new InvalidOperationException("Window content not loaded.");
 
-            FileListBox = GetElement<ListView>(root, nameof(FileListBox));
-            ThemeToggleButton = GetElement<Button>(root, nameof(ThemeToggleButton));
-            DropLabel = GetElement<TextBlock>(root, nameof(DropLabel));
-            StatusLabel = GetElement<TextBlock>(root, nameof(StatusLabel));
-            PasswordBox = GetElement<PasswordBox>(root, nameof(PasswordBox));
-            PasswordStrengthBar = GetElement<ProgressBar>(root, nameof(PasswordStrengthBar));
-            PasswordStrengthText = GetElement<TextBlock>(root, nameof(PasswordStrengthText));
-            EncryptButton = GetElement<Button>(root, nameof(EncryptButton));
-            DecryptButton = GetElement<Button>(root, nameof(DecryptButton));
-            ClearListButton = GetElement<Button>(root, nameof(ClearListButton));
-            DropPanel = GetElement<Border>(root, nameof(DropPanel));
+            _fileListBox = GetElement<ListView>(root, nameof(FileListBox));
+            _themeToggleButton = GetElement<Button>(root, nameof(ThemeToggleButton));
+            _dropLabel = GetElement<TextBlock>(root, nameof(DropLabel));
+            _statusLabel = GetElement<TextBlock>(root, nameof(StatusLabel));
+            _passwordBox = GetElement<PasswordBox>(root, nameof(PasswordBox));
+            _passwordStrengthBar = GetElement<ProgressBar>(root, nameof(PasswordStrengthBar));
+            _passwordStrengthText = GetElement<TextBlock>(root, nameof(PasswordStrengthText));
+            _encryptButton = GetElement<Button>(root, nameof(EncryptButton));
+            _decryptButton = GetElement<Button>(root, nameof(DecryptButton));
+            _clearListButton = GetElement<Button>(root, nameof(ClearListButton));
+            _dropPanel = GetElement<Border>(root, nameof(DropPanel));
 
             _xamlRoot = root.XamlRoot;
-            FileListBox.ItemsSource = FileList;
+            _fileListBox.ItemsSource = FileList;
             isDarkTheme = true;
-            ThemeToggleButton.Content = "☀️";
+            _themeToggleButton.Content = "☀️";
             UpdateStatusLabel();
 
             // Set window size to 600x800
             InitializeAppWindow();
 
             // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
-            DropLabelControler = DropLabel;
+            DropLabelControler = _dropLabel;
 
         }
 
@@ -121,7 +121,7 @@ namespace FileLocker
 
         private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
         {
-            if (ThemeToggleButton is Button button)
+            if (_themeToggleButton is Button button)
             {
                 isDarkTheme = !isDarkTheme;
                 button.Content = isDarkTheme ? "🌙" : "☀️";
@@ -258,7 +258,7 @@ namespace FileLocker
         private void SetStatus(string text)
         {
             StatusText = text;
-            StatusLabel.Text = text;
+            _statusLabel.Text = text;
         }
 
         private void UpdateStatusLabel()
@@ -272,10 +272,10 @@ namespace FileLocker
         // --- Password Section ---
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
         {
-            var evaluation = CalculatePasswordStrength(PasswordBox.Password);
-            PasswordStrengthBar.Value = evaluation.Score;
-            PasswordStrengthText.Text = evaluation.Feedback;
-            PasswordStrengthBar.Foreground = new SolidColorBrush(evaluation.BarColor);
+            var evaluation = CalculatePasswordStrength(_passwordBox.Password);
+            _passwordStrengthBar.Value = evaluation.Score;
+            _passwordStrengthText.Text = evaluation.Feedback;
+            _passwordStrengthBar.Foreground = new SolidColorBrush(evaluation.BarColor);
         }
 
         private PasswordStrengthResult CalculatePasswordStrength(string password)
@@ -345,12 +345,12 @@ namespace FileLocker
                 _ = ShowErrorDialogAsync("Please select files or folders to process.");
                 return false;
             }
-            if (string.IsNullOrWhiteSpace(PasswordBox.Password))
+            if (string.IsNullOrWhiteSpace(_passwordBox.Password))
             {
                 _ = ShowErrorDialogAsync("Please enter a password.");
                 return false;
             }
-            if (PasswordBox.Password.Length < 8)
+            if (_passwordBox.Password.Length < 8)
             {
                 _ = ShowConfirmDialogAsync("Password is very weak. Use at least 8 characters with mixed types.", "Weak Password");
                 return false;
@@ -365,7 +365,7 @@ namespace FileLocker
                 SetUIEnabled(false);
 
                 // Capture password on UI thread before starting background tasks
-                string password = PasswordBox.Password;
+                string password = _passwordBox.Password;
 
                 var allFiles = selectedPaths.ToList();
                 int processed = 0;
@@ -872,11 +872,11 @@ namespace FileLocker
 
         private void SetUIEnabled(bool enabled)
         {
-            EncryptButton.IsEnabled = enabled;
-            DecryptButton.IsEnabled = enabled;
-            PasswordBox.IsEnabled = enabled;
-            ClearListButton.IsEnabled = enabled;
-            DropPanel.AllowDrop = enabled;
+            _encryptButton.IsEnabled = enabled;
+            _decryptButton.IsEnabled = enabled;
+            _passwordBox.IsEnabled = enabled;
+            _clearListButton.IsEnabled = enabled;
+            _dropPanel.AllowDrop = enabled;
         }
 
         private void AnimateDropPanel(bool highlight)
@@ -885,7 +885,7 @@ namespace FileLocker
             var color = highlight ?
                 new SolidColorBrush(Microsoft.UI.Colors.LightGreen) :
                 new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            DropPanel.Background = color;
+            _dropPanel.Background = color;
         }
 
         private class FileMetadata
