@@ -65,6 +65,7 @@ namespace FileLockerWinUI
         private ComboBox _operationModeCombo = null!;
         private ComboBox _algorithmCombo = null!;
         private ComboBox _keySizeCombo = null!;
+        private StackPanel _hashHelperPanel = null!;
         private TextBox _hashInputBox = null!;
         private TextBox _hashOutputBox = null!;
         private TextBox _metadataNameBox = null!;
@@ -74,12 +75,15 @@ namespace FileLockerWinUI
         private ToggleSwitch _metadataRandomizeToggle = null!;
         private TextBlock _metadataHelperText = null!;
         private TextBlock _algorithmHintText = null!;
+        private Button _recommendedModeButton = null!;
 
         // Advanced options properties
         public bool IsCompressModeEnabled { get; set; } = true;
         public bool IsScrambleNamesEnabled { get; set; } = false;
         public bool IsSteganographyEnabled { get; set; } = false;
         private readonly Random _random = new();
+        private readonly string[] _encryptionAlgorithms = new[] { "AES-GCM", "AES-CBC" };
+        private readonly string[] _hashAlgorithms = new[] { "SHA-256", "SHA-512", "Base64" };
 
         private record struct PasswordStrengthResult(
             int Score,
@@ -138,6 +142,7 @@ namespace FileLockerWinUI
             _operationModeCombo = GetElement<ComboBox>(root, nameof(OperationModeCombo));
             _algorithmCombo = GetElement<ComboBox>(root, nameof(AlgorithmCombo));
             _keySizeCombo = GetElement<ComboBox>(root, nameof(KeySizeCombo));
+            _hashHelperPanel = GetElement<StackPanel>(root, nameof(HashHelperPanel));
             _hashInputBox = GetElement<TextBox>(root, nameof(HashInputBox));
             _hashOutputBox = GetElement<TextBox>(root, nameof(HashOutputBox));
             _metadataNameBox = GetElement<TextBox>(root, nameof(MetadataNameBox));
@@ -147,13 +152,14 @@ namespace FileLockerWinUI
             _metadataRandomizeToggle = GetElement<ToggleSwitch>(root, nameof(MetadataRandomizeToggle));
             _metadataHelperText = GetElement<TextBlock>(root, nameof(MetadataHelperText));
             _algorithmHintText = GetElement<TextBlock>(root, nameof(AlgorithmHintText));
+            _recommendedModeButton = GetElement<Button>(root, nameof(RecommendedModeButton));
 
             _xamlRoot = root.XamlRoot;
             _fileListBox.ItemsSource = FileList;
             isDarkTheme = true;
             _themeToggleButton.Content = "🌙";
             UpdateStatusLabel();
-            UpdateAlgorithmHelper();
+            ConfigureModeOptions();
 
             // Set window size to 600x800
             InitializeAppWindow();
@@ -336,12 +342,13 @@ namespace FileLockerWinUI
         private void OperationModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_algorithmHintText == null) return;
-            UpdateAlgorithmHelper();
+            ConfigureModeOptions();
         }
 
         private void AlgorithmCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_algorithmHintText == null) return;
+            UpdateKeySizeInteractivity();
             UpdateAlgorithmHelper();
         }
 
@@ -351,12 +358,90 @@ namespace FileLockerWinUI
             UpdateAlgorithmHelper();
         }
 
+        private void RecommendedModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetComboSelection(_operationModeCombo, "Encrypt / Decrypt");
+            ConfigureModeOptions();
+            SetComboSelection(_algorithmCombo, "AES-GCM");
+            SetComboSelection(_keySizeCombo, "256");
+            UpdateAlgorithmHelper();
+            SetStatus("Recommended mode applied: AES-256-GCM");
+        }
+
+        private void ConfigureModeOptions()
+        {
+            string mode = GetComboContent(_operationModeCombo) ?? "Encrypt / Decrypt";
+            bool isHashMode = mode.Contains("Hash", StringComparison.OrdinalIgnoreCase);
+            string? previousAlgorithm = GetComboContent(_algorithmCombo);
+
+            PopulateComboWithValues(_algorithmCombo, isHashMode ? _hashAlgorithms : _encryptionAlgorithms, previousAlgorithm);
+            PopulateKeySizes(isHashMode);
+            _hashHelperPanel.Visibility = isHashMode ? Visibility.Visible : Visibility.Collapsed;
+            _recommendedModeButton.Visibility = isHashMode ? Visibility.Collapsed : Visibility.Visible;
+            UpdateKeySizeInteractivity();
+            UpdateAlgorithmHelper();
+        }
+
+        private void PopulateComboWithValues(ComboBox comboBox, IEnumerable<string> values, string? preferredSelection)
+        {
+            comboBox.Items.Clear();
+            int selectedIndex = 0;
+            int index = 0;
+
+            foreach (string value in values)
+            {
+                comboBox.Items.Add(new ComboBoxItem { Content = value });
+                if (!string.IsNullOrWhiteSpace(preferredSelection) &&
+                    string.Equals(value, preferredSelection, StringComparison.OrdinalIgnoreCase))
+                {
+                    selectedIndex = index;
+                }
+                index++;
+            }
+
+            comboBox.SelectedIndex = Math.Clamp(selectedIndex, 0, Math.Max(0, comboBox.Items.Count - 1));
+        }
+
+        private void PopulateKeySizes(bool isHashMode)
+        {
+            _keySizeCombo.Items.Clear();
+            int[] sizes = isHashMode ? new[] { 256, 512 } : new[] { 128, 192, 256 };
+            for (int i = 0; i < sizes.Length; i++)
+            {
+                _keySizeCombo.Items.Add(new ComboBoxItem { Content = sizes[i].ToString() });
+            }
+
+            _keySizeCombo.SelectedIndex = isHashMode ? 0 : sizes.Length - 1;
+        }
+
+        private void UpdateKeySizeInteractivity()
+        {
+            string? mode = GetComboContent(_operationModeCombo);
+            string? algorithm = GetComboContent(_algorithmCombo);
+            bool isHashMode = mode != null && mode.Contains("Hash", StringComparison.OrdinalIgnoreCase);
+            bool usesKeySize = !string.Equals(algorithm, "Base64", StringComparison.OrdinalIgnoreCase);
+            _keySizeCombo.IsEnabled = !isHashMode || usesKeySize;
+            _keySizeCombo.Opacity = _keySizeCombo.IsEnabled ? 1 : 0.6;
+        }
+
         private void UpdateAlgorithmHelper()
         {
             string algorithm = GetComboContent(_algorithmCombo) ?? "AES-GCM";
             int keySize = ParseKeySizeSelection();
             string mode = GetComboContent(_operationModeCombo) ?? "Encrypt / Decrypt";
-            _algorithmHintText.Text = $"Preset: {algorithm} with {keySize}-bit key ({mode})";
+            bool isHashMode = mode.Contains("Hash", StringComparison.OrdinalIgnoreCase);
+
+            if (isHashMode)
+            {
+                string detail = algorithm.StartsWith("SHA", StringComparison.OrdinalIgnoreCase)
+                    ? $"{algorithm} ({keySize}-bit digest)"
+                    : "Base64 text helper";
+                _algorithmHintText.Text = $"Preset: {detail}";
+            }
+            else
+            {
+                _algorithmHintText.Text = $"Preset: {algorithm} with {keySize}-bit key ({mode})";
+            }
         }
 
         // --- Password Section ---
@@ -660,6 +745,20 @@ namespace FileLockerWinUI
             }
 
             return comboBox.SelectedValue as string;
+        }
+
+        private void SetComboSelection(ComboBox comboBox, string content)
+        {
+            for (int i = 0; i < comboBox.Items.Count; i++)
+            {
+                if (comboBox.Items[i] is ComboBoxItem item &&
+                    item.Content is string value &&
+                    string.Equals(value, content, StringComparison.OrdinalIgnoreCase))
+                {
+                    comboBox.SelectedIndex = i;
+                    return;
+                }
+            }
         }
 
         private int ParseKeySizeSelection()
@@ -1319,7 +1418,12 @@ namespace FileLockerWinUI
 
         private async void About_Click(object sender, RoutedEventArgs e)
         {
-            await ShowInfoDialogAsync("FileLocker WinUI 3\nA secure file encryption tool using AES-256-GCM encryption.\n\n© 2025 Jeremy Hayes", "About FileLocker");
+            await ShowInfoDialogAsync(
+                "FileLocker WinUI 3\nSecure file encryption with AES-256-GCM plus hashing & encoding helpers." +
+                "\nGitHub: https://github.com/jeremyhayes/FileLocker" +
+                "\nFeatures: drag-and-drop queuing, metadata controls, optional steganography." +
+                "\n\n© 2025 Jeremy Hayes",
+                "About FileLocker");
         }
 
         private void Minimize_Click(object sender, RoutedEventArgs e)
