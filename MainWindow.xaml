@@ -93,19 +93,19 @@
         <!--  Main Content  -->
         <Border
             Grid.Row="1"
-            Margin="20"
-            Padding="24"
+            Margin="16"
+            Padding="18"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
             BorderThickness="1"
             CornerRadius="12">
-            <StackPanel Spacing="24">
+            <StackPanel Spacing="16">
 
                 <!--  Drag & Drop Area  -->
                 <Border
                     x:Name="DropPanel"
                     Margin="0,0,0,8"
-                    Padding="32"
+                    Padding="24"
                     AllowDrop="True"
                     Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                     BorderBrush="{ThemeResource SystemControlBackgroundAccentBrush}"
@@ -117,7 +117,7 @@
                     <StackPanel
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Spacing="12">
+                        Spacing="8">
                         <TextBlock
                             x:Name="DropLabel"
                             HorizontalAlignment="Center"
@@ -128,9 +128,9 @@
                             HorizontalAlignment="Center"
                             Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
                             Opacity="0.8"
-                            Text="You can add multiple files and folders at once." />
+                            Text="Add multiple files or folders in one drop." />
                         <Button
-                            Padding="20,10"
+                            Padding="16,8"
                             HorizontalAlignment="Center"
                             Click="BrowseFiles_Click"
                             Content="Browse Files" />
@@ -148,7 +148,7 @@
                         CornerRadius="8">
                         <ListView
                             x:Name="FileListBox"
-                            MaxHeight="140"
+                            MaxHeight="120"
                             Margin="4"
                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -225,52 +225,54 @@
                 </StackPanel>
 
                 <!--  Advanced Options  -->
-                <StackPanel>
-                    <TextBlock
-                        Margin="0,0,0,8"
-                        FontWeight="Bold"
-                        Text="Advanced Options" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                <Expander x:Name="AdvancedOptionsExpander" IsExpanded="False" Header="Advanced Options">
+                    <StackPanel>
+                        <TextBlock
+                            Margin="0,0,0,8"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Text="Fine-tune how files are prepared before encryption." />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
 
-                        <ToggleSwitch
-                            x:Name="CompressModeToggle"
-                            Grid.Column="0"
-                            Margin="0,0,8,0"
-                            Header="Compress Files"
-                            IsOn="True"
-                            OffContent="Disabled"
-                            OnContent="Enabled"
-                            Toggled="CompressModeToggle_Toggled"
-                            ToolTipService.ToolTip="Reduce file size before encryption for faster transfers." />
+                            <ToggleSwitch
+                                x:Name="CompressModeToggle"
+                                Grid.Column="0"
+                                Margin="0,0,8,0"
+                                Header="Compress Files"
+                                IsOn="True"
+                                OffContent="Disabled"
+                                OnContent="Enabled"
+                                Toggled="CompressModeToggle_Toggled"
+                                ToolTipService.ToolTip="Reduce file size before encryption for faster transfers." />
 
-                        <ToggleSwitch
-                            x:Name="ScrambleNamesToggle"
-                            Grid.Column="1"
-                            Margin="4,0"
-                            Header="Scramble Names"
-                            IsOn="False"
-                            OffContent="Disabled"
-                            OnContent="Enabled"
-                            Toggled="ScrambleNamesToggle_Toggled"
-                            ToolTipService.ToolTip="Obfuscate file names while keeping contents secure." />
+                            <ToggleSwitch
+                                x:Name="ScrambleNamesToggle"
+                                Grid.Column="1"
+                                Margin="4,0"
+                                Header="Scramble Names"
+                                IsOn="False"
+                                OffContent="Disabled"
+                                OnContent="Enabled"
+                                Toggled="ScrambleNamesToggle_Toggled"
+                                ToolTipService.ToolTip="Obfuscate file names while keeping contents secure." />
 
-                        <ToggleSwitch
-                            x:Name="SteganographyToggle"
-                            Grid.Column="2"
-                            Margin="8,0,0,0"
-                            Header="Steganography"
-                            IsOn="False"
-                            OffContent="Disabled"
-                            OnContent="Enabled"
-                            Toggled="SteganographyToggle_Toggled"
-                            ToolTipService.ToolTip="(Placeholder) Hide encrypted data inside an image container." />
-                    </Grid>
-                </StackPanel>
+                            <ToggleSwitch
+                                x:Name="SteganographyToggle"
+                                Grid.Column="2"
+                                Margin="8,0,0,0"
+                                Header="Steganography"
+                                IsOn="False"
+                                OffContent="Disabled"
+                                OnContent="Enabled"
+                                Toggled="SteganographyToggle_Toggled"
+                                ToolTipService.ToolTip="(Placeholder) Hide encrypted data inside an image container." />
+                        </Grid>
+                    </StackPanel>
+                </Expander>
 
                 <!--  Modes & Algorithms  -->
                 <StackPanel>
@@ -297,34 +299,30 @@
                             Grid.Column="1"
                             Margin="0,0,8,0"
                             PlaceholderText="Algorithm"
-                            SelectionChanged="AlgorithmCombo_SelectionChanged">
-                            <ComboBoxItem Content="AES" />
-                            <ComboBoxItem Content="AES-GCM" IsSelected="True" />
-                            <ComboBoxItem Content="AES-CBC" />
-                            <ComboBoxItem Content="SHA" />
-                            <ComboBoxItem Content="Base64" />
-                        </ComboBox>
+                            SelectionChanged="AlgorithmCombo_SelectionChanged" />
 
                         <ComboBox
                             x:Name="KeySizeCombo"
                             Grid.Column="2"
                             PlaceholderText="Bits"
-                            SelectionChanged="KeySizeCombo_SelectionChanged">
-                            <ComboBoxItem Content="128" />
-                            <ComboBoxItem Content="192" />
-                            <ComboBoxItem Content="256" IsSelected="True" />
-                            <ComboBoxItem Content="512" />
-                        </ComboBox>
+                            SelectionChanged="KeySizeCombo_SelectionChanged" />
                     </Grid>
-                    <TextBlock
-                        x:Name="AlgorithmHintText"
-                        Margin="0,4,0,0"
-                        Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                        Text="Preset: AES-GCM with 256-bit key" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Spacing="8">
+                        <Button
+                            x:Name="RecommendedModeButton"
+                            Padding="12,6"
+                            Click="RecommendedModeButton_Click"
+                            Content="Recommended Mode" />
+                        <TextBlock
+                            x:Name="AlgorithmHintText"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Text="Preset: AES-GCM with 256-bit key" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!--  Hashing & Encoding Helper  -->
-                <StackPanel>
+                <StackPanel x:Name="HashHelperPanel" Visibility="Collapsed">
                     <TextBlock FontWeight="Bold" Text="Hashing &amp; Encoding Helper" />
                     <TextBox
                         x:Name="HashInputBox"
@@ -357,80 +355,85 @@
                 </StackPanel>
 
                 <!--  Metadata Editor  -->
-                <StackPanel>
-                    <TextBlock FontWeight="Bold" Text="Metadata Editor" />
-                    <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox
-                            x:Name="MetadataNameBox"
-                            Grid.Column="0"
-                            Margin="0,0,8,0"
-                            PlaceholderText="Alias or filename override" />
-                        <TextBox
-                            x:Name="MetadataNotesBox"
-                            Grid.Column="1"
-                            PlaceholderText="Notes or tags to embed" />
-                    </Grid>
-                    <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox
-                            x:Name="MetadataCreatedBox"
-                            Grid.Column="0"
-                            Margin="0,0,8,0"
-                            PlaceholderText="Creation timestamp (optional)" />
-                        <TextBox
-                            x:Name="MetadataModifiedBox"
-                            Grid.Column="1"
-                            PlaceholderText="Modified timestamp (optional)" />
-                    </Grid>
-                    <StackPanel
-                        Margin="0,6,0,0"
-                        Orientation="Horizontal"
-                        Spacing="8">
-                        <ToggleSwitch
-                            x:Name="MetadataRandomizeToggle"
-                            Header="Randomize metadata"
-                            OffContent="Manual"
-                            OnContent="Random"
-                            Toggled="MetadataRandomizeToggle_Toggled" />
-                        <Button
-                            x:Name="MetadataRandomizeButton"
-                            Padding="12,6"
-                            Click="MetadataRandomizeButton_Click"
-                            Content="Randomize now" />
+                <Expander x:Name="MetadataExpander" IsExpanded="False" Header="Metadata Editor">
+                    <StackPanel>
+                        <TextBlock
+                            Margin="0,0,0,8"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Text="Optional labels and timestamps saved with the encrypted file." />
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                x:Name="MetadataNameBox"
+                                Grid.Column="0"
+                                Margin="0,0,8,0"
+                                PlaceholderText="Alias or filename override" />
+                            <TextBox
+                                x:Name="MetadataNotesBox"
+                                Grid.Column="1"
+                                PlaceholderText="Notes or tags to embed" />
+                        </Grid>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                x:Name="MetadataCreatedBox"
+                                Grid.Column="0"
+                                Margin="0,0,8,0"
+                                PlaceholderText="Creation timestamp (optional)" />
+                            <TextBox
+                                x:Name="MetadataModifiedBox"
+                                Grid.Column="1"
+                                PlaceholderText="Modified timestamp (optional)" />
+                        </Grid>
+                        <StackPanel
+                            Margin="0,6,0,0"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <ToggleSwitch
+                                x:Name="MetadataRandomizeToggle"
+                                Header="Randomize metadata"
+                                OffContent="Manual"
+                                OnContent="Random"
+                                Toggled="MetadataRandomizeToggle_Toggled" />
+                            <Button
+                                x:Name="MetadataRandomizeButton"
+                                Padding="12,6"
+                                Click="MetadataRandomizeButton_Click"
+                                Content="Randomize now" />
+                        </StackPanel>
+                        <TextBlock
+                            x:Name="MetadataHelperText"
+                            Margin="0,2,0,0"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Text="Overrides stored alongside encrypted payload for auditing." />
                     </StackPanel>
-                    <TextBlock
-                        x:Name="MetadataHelperText"
-                        Margin="0,2,0,0"
-                        Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                        Text="Overrides stored alongside encrypted payload for auditing." />
-                </StackPanel>
+                </Expander>
 
                 <!--  Action Buttons  -->
                 <StackPanel
-                    Margin="0,8,0,0"
+                    Margin="0,4,0,0"
                     HorizontalAlignment="Center"
                     Orientation="Horizontal"
-                    Spacing="24">
+                    Spacing="12">
                     <Button
                         x:Name="EncryptButton"
-                        Padding="20,10"
+                        Padding="16,8"
                         Background="{ThemeResource SystemControlBackgroundAccentBrush}"
                         Click="EncryptButton_Click"
-                        Content="🔒 Encrypt Files"
+                        Content="🔒 Encrypt"
                         Foreground="White"
                         ToolTipService.ToolTip="Encrypt all selected files using the password above." />
                     <Button
                         x:Name="DecryptButton"
-                        Padding="20,10"
+                        Padding="16,8"
                         Click="DecryptButton_Click"
-                        Content="🔓 Decrypt Files"
+                        Content="🔓 Decrypt"
                         ToolTipService.ToolTip="Decrypt selected .locked files with your password." />
                 </StackPanel>
             </StackPanel>
