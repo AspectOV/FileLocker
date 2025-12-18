@@ -272,6 +272,140 @@
                     </Grid>
                 </StackPanel>
 
+                <!--  Modes & Algorithms  -->
+                <StackPanel>
+                    <TextBlock FontWeight="Bold" Text="Modes & Algorithms" />
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <ComboBox
+                            x:Name="OperationModeCombo"
+                            Grid.Column="0"
+                            Margin="0,0,8,0"
+                            PlaceholderText="Select operation mode"
+                            SelectionChanged="OperationModeCombo_SelectionChanged">
+                            <ComboBoxItem Content="Encrypt / Decrypt" IsSelected="True" />
+                            <ComboBoxItem Content="Hash / Encode" />
+                        </ComboBox>
+
+                        <ComboBox
+                            x:Name="AlgorithmCombo"
+                            Grid.Column="1"
+                            Margin="0,0,8,0"
+                            PlaceholderText="Algorithm"
+                            SelectionChanged="AlgorithmCombo_SelectionChanged">
+                            <ComboBoxItem Content="AES" />
+                            <ComboBoxItem Content="AES-GCM" IsSelected="True" />
+                            <ComboBoxItem Content="AES-CBC" />
+                            <ComboBoxItem Content="SHA" />
+                            <ComboBoxItem Content="Base64" />
+                        </ComboBox>
+
+                        <ComboBox
+                            x:Name="KeySizeCombo"
+                            Grid.Column="2"
+                            PlaceholderText="Bits"
+                            SelectionChanged="KeySizeCombo_SelectionChanged">
+                            <ComboBoxItem Content="128" />
+                            <ComboBoxItem Content="192" />
+                            <ComboBoxItem Content="256" IsSelected="True" />
+                            <ComboBoxItem Content="512" />
+                        </ComboBox>
+                    </Grid>
+                    <TextBlock
+                        x:Name="AlgorithmHintText"
+                        Margin="0,4,0,0"
+                        Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                        Text="Preset: AES-GCM with 256-bit key" />
+                </StackPanel>
+
+                <!--  Hashing & Encoding Helper  -->
+                <StackPanel>
+                    <TextBlock FontWeight="Bold" Text="Hashing & Encoding Helper" />
+                    <TextBox
+                        x:Name="HashInputBox"
+                        Margin="0,4,0,0"
+                        AcceptsReturn="True"
+                        Height="80"
+                        PlaceholderText="Enter text to hash or encode" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                        <Button
+                            x:Name="HashRunButton"
+                            Padding="14,8"
+                            Click="HashRunButton_Click"
+                            Content="Generate"
+                            ToolTipService.ToolTip="Run hashing or encoding using the selected mode." />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            Text="Uses the password as a key for AES-based selections." />
+                    </StackPanel>
+                    <TextBox
+                        x:Name="HashOutputBox"
+                        Margin="0,4,0,0"
+                        AcceptsReturn="True"
+                        Height="80"
+                        IsReadOnly="True"
+                        PlaceholderText="Hash or encoded output will appear here" />
+                </StackPanel>
+
+                <!--  Metadata Editor  -->
+                <StackPanel>
+                    <TextBlock FontWeight="Bold" Text="Metadata Editor" />
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="MetadataNameBox"
+                            Grid.Column="0"
+                            Margin="0,0,8,0"
+                            PlaceholderText="Alias or filename override" />
+                        <TextBox
+                            x:Name="MetadataNotesBox"
+                            Grid.Column="1"
+                            PlaceholderText="Notes or tags to embed" />
+                    </Grid>
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="MetadataCreatedBox"
+                            Grid.Column="0"
+                            Margin="0,0,8,0"
+                            PlaceholderText="Creation timestamp (optional)" />
+                        <TextBox
+                            x:Name="MetadataModifiedBox"
+                            Grid.Column="1"
+                            PlaceholderText="Modified timestamp (optional)" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                        <ToggleSwitch
+                            x:Name="MetadataRandomizeToggle"
+                            Header="Randomize metadata"
+                            OffContent="Manual"
+                            OnContent="Random"
+                            Toggled="MetadataRandomizeToggle_Toggled" />
+                        <Button
+                            x:Name="MetadataRandomizeButton"
+                            Padding="12,6"
+                            Click="MetadataRandomizeButton_Click"
+                            Content="Randomize now" />
+                    </StackPanel>
+                    <TextBlock
+                        x:Name="MetadataHelperText"
+                        Margin="0,2,0,0"
+                        Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                        Text="Overrides stored alongside encrypted payload for auditing." />
+                </StackPanel>
+
                 <!--  Action Buttons  -->
                 <StackPanel
                     Margin="0,8,0,0"
