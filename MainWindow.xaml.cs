@@ -13,6 +13,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -61,11 +62,24 @@ namespace FileLockerWinUI
         private Button _decryptButton = null!;
         private Button _clearListButton = null!;
         private Border _dropPanel = null!;
+        private ComboBox _operationModeCombo = null!;
+        private ComboBox _algorithmCombo = null!;
+        private ComboBox _keySizeCombo = null!;
+        private TextBox _hashInputBox = null!;
+        private TextBox _hashOutputBox = null!;
+        private TextBox _metadataNameBox = null!;
+        private TextBox _metadataNotesBox = null!;
+        private TextBox _metadataCreatedBox = null!;
+        private TextBox _metadataModifiedBox = null!;
+        private ToggleSwitch _metadataRandomizeToggle = null!;
+        private TextBlock _metadataHelperText = null!;
+        private TextBlock _algorithmHintText = null!;
 
         // Advanced options properties
         public bool IsCompressModeEnabled { get; set; } = true;
         public bool IsScrambleNamesEnabled { get; set; } = false;
         public bool IsSteganographyEnabled { get; set; } = false;
+        private readonly Random _random = new();
 
         private record struct PasswordStrengthResult(
             int Score,
@@ -121,12 +135,25 @@ namespace FileLockerWinUI
             _decryptButton = GetElement<Button>(root, nameof(DecryptButton));
             _clearListButton = GetElement<Button>(root, nameof(ClearListButton));
             _dropPanel = GetElement<Border>(root, nameof(DropPanel));
+            _operationModeCombo = GetElement<ComboBox>(root, nameof(OperationModeCombo));
+            _algorithmCombo = GetElement<ComboBox>(root, nameof(AlgorithmCombo));
+            _keySizeCombo = GetElement<ComboBox>(root, nameof(KeySizeCombo));
+            _hashInputBox = GetElement<TextBox>(root, nameof(HashInputBox));
+            _hashOutputBox = GetElement<TextBox>(root, nameof(HashOutputBox));
+            _metadataNameBox = GetElement<TextBox>(root, nameof(MetadataNameBox));
+            _metadataNotesBox = GetElement<TextBox>(root, nameof(MetadataNotesBox));
+            _metadataCreatedBox = GetElement<TextBox>(root, nameof(MetadataCreatedBox));
+            _metadataModifiedBox = GetElement<TextBox>(root, nameof(MetadataModifiedBox));
+            _metadataRandomizeToggle = GetElement<ToggleSwitch>(root, nameof(MetadataRandomizeToggle));
+            _metadataHelperText = GetElement<TextBlock>(root, nameof(MetadataHelperText));
+            _algorithmHintText = GetElement<TextBlock>(root, nameof(AlgorithmHintText));
 
             _xamlRoot = root.XamlRoot;
             _fileListBox.ItemsSource = FileList;
             isDarkTheme = true;
             _themeToggleButton.Content = "🌙";
             UpdateStatusLabel();
+            UpdateAlgorithmHelper();
 
             // Set window size to 600x800
             InitializeAppWindow();
@@ -306,6 +333,32 @@ namespace FileLockerWinUI
                 SetStatus($"Ready - {selectedPaths.Count} item(s) selected");
         }
 
+        private void OperationModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_algorithmHintText == null) return;
+            UpdateAlgorithmHelper();
+        }
+
+        private void AlgorithmCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_algorithmHintText == null) return;
+            UpdateAlgorithmHelper();
+        }
+
+        private void KeySizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_algorithmHintText == null) return;
+            UpdateAlgorithmHelper();
+        }
+
+        private void UpdateAlgorithmHelper()
+        {
+            string algorithm = GetComboContent(_algorithmCombo) ?? "AES-GCM";
+            int keySize = ParseKeySizeSelection();
+            string mode = GetComboContent(_operationModeCombo) ?? "Encrypt / Decrypt";
+            _algorithmHintText.Text = $"Preset: {algorithm} with {keySize}-bit key ({mode})";
+        }
+
         // --- Password Section ---
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
         {
@@ -411,6 +464,214 @@ namespace FileLockerWinUI
 
             return true;
         }
+
+        private async void HashRunButton_Click(object sender, RoutedEventArgs e)
+        {
+            string input = _hashInputBox.Text;
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                await ShowErrorDialogAsync("Enter text to hash or encode.");
+                return;
+            }
+
+            string algorithm = GetComboContent(_algorithmCombo) ?? "AES-GCM";
+            int keySize = ParseKeySizeSelection();
+
+            try
+            {
+                string output = await Task.Run(() => RunHashOrEncode(input, algorithm, keySize));
+                _hashOutputBox.Text = output;
+                SetStatus($"Generated output using {algorithm} ({keySize}-bit)");
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync($"Failed to generate output: {ex.Message}");
+            }
+        }
+
+        private string RunHashOrEncode(string input, string algorithm, int keySize)
+        {
+            byte[] inputBytes = Encoding.UTF8.GetBytes(input);
+
+            if (algorithm.Contains("SHA", StringComparison.OrdinalIgnoreCase))
+            {
+                byte[] hash = keySize >= 512 ? SHA512.HashData(inputBytes) : SHA256.HashData(inputBytes);
+                return Convert.ToHexString(hash);
+            }
+
+            if (algorithm.Contains("Base64", StringComparison.OrdinalIgnoreCase))
+            {
+                return Convert.ToBase64String(inputBytes);
+            }
+
+            return EncryptTextWithAes(inputBytes, algorithm, keySize);
+        }
+
+        private string EncryptTextWithAes(byte[] inputBytes, string algorithm, int keySize)
+        {
+            if (string.IsNullOrWhiteSpace(_passwordBox.Password))
+            {
+                throw new InvalidOperationException("Enter a password for AES-based helpers.");
+            }
+
+            byte[] salt = GenerateRandomBytes(16);
+            int keySizeBytes = Math.Max(16, keySize / 8);
+            byte[] key = new Rfc2898DeriveBytes(_passwordBox.Password, salt, 80000, HashAlgorithmName.SHA256).GetBytes(keySizeBytes);
+
+            if (algorithm.Contains("GCM", StringComparison.OrdinalIgnoreCase))
+            {
+                return EncodeAesGcmPayload(inputBytes, key, salt, keySize);
+            }
+
+            return EncodeAesCbcPayload(inputBytes, key, salt, keySize);
+        }
+
+        private string EncodeAesGcmPayload(byte[] inputBytes, byte[] key, byte[] salt, int keySize)
+        {
+            byte[] iv = GenerateRandomBytes(IV_SIZE);
+            byte[] ciphertext = new byte[inputBytes.Length];
+            byte[] tag = new byte[TAG_SIZE];
+
+            using (var aes = new AesGcm(key, TAG_SIZE))
+            {
+                aes.Encrypt(iv, inputBytes, ciphertext, tag);
+            }
+
+            return EncodeLabeledPayload("AES-GCM", keySize, salt, iv, tag, ciphertext);
+        }
+
+        private string EncodeAesCbcPayload(byte[] inputBytes, byte[] key, byte[] salt, int keySize)
+        {
+            using var aes = Aes.Create();
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            aes.KeySize = Math.Min(keySize, 256);
+            aes.Key = key;
+            aes.GenerateIV();
+
+            using var encryptor = aes.CreateEncryptor();
+            byte[] ciphertext = encryptor.TransformFinalBlock(inputBytes, 0, inputBytes.Length);
+            return EncodeLabeledPayload("AES-CBC", keySize, salt, aes.IV, Array.Empty<byte>(), ciphertext);
+        }
+
+        private string EncodeLabeledPayload(string label, int keySize, byte[] salt, byte[] iv, byte[] tag, byte[] ciphertext)
+        {
+            using var stream = new MemoryStream();
+            WriteLengthPrefixed(stream, salt);
+            WriteLengthPrefixed(stream, iv);
+            WriteLengthPrefixed(stream, tag);
+            WriteLengthPrefixed(stream, ciphertext);
+
+            return $"{label} ({keySize}-bit): {Convert.ToBase64String(stream.ToArray())}";
+        }
+
+        private void WriteLengthPrefixed(Stream stream, byte[] data)
+        {
+            ushort length = (ushort)data.Length;
+            stream.Write(BitConverter.GetBytes(length), 0, sizeof(ushort));
+            stream.Write(data, 0, data.Length);
+        }
+
+        private void ApplyMetadataOverrides(FileMetadata metadata, string filePath)
+        {
+            metadata.MetadataLabel = string.IsNullOrWhiteSpace(_metadataNameBox.Text)
+                ? metadata.OriginalFileName
+                : _metadataNameBox.Text.Trim();
+            metadata.OriginalFileName = metadata.MetadataLabel;
+            metadata.CustomNote = _metadataNotesBox.Text?.Trim() ?? string.Empty;
+            metadata.Algorithm = GetComboContent(_algorithmCombo) ?? "AES-GCM";
+            metadata.Mode = GetComboContent(_operationModeCombo) ?? "Encrypt / Decrypt";
+            metadata.KeySizeBits = ParseKeySizeSelection();
+
+            if (_metadataRandomizeToggle.IsOn)
+            {
+                var (created, modified) = GenerateRandomizedDates();
+                metadata.CreationTime = created;
+                metadata.LastWriteTime = modified;
+                _metadataHelperText.Text = "Metadata randomized for this session.";
+            }
+            else
+            {
+                metadata.CreationTime = ParseDateOrDefault(_metadataCreatedBox.Text, File.GetCreationTime(filePath));
+                metadata.LastWriteTime = ParseDateOrDefault(_metadataModifiedBox.Text, File.GetLastWriteTime(filePath));
+                _metadataHelperText.Text = "Overrides stored alongside encrypted payload for auditing.";
+            }
+        }
+
+        private (DateTime created, DateTime modified) GenerateRandomizedDates()
+        {
+            DateTime now = DateTime.UtcNow;
+            int backDays = _random.Next(7, 1800);
+            DateTime created = now.AddDays(-backDays).AddMinutes(_random.Next(0, 1440));
+            DateTime modified = created.AddMinutes(_random.Next(5, 1200));
+            return (created, modified);
+        }
+
+        private void MetadataRandomizeToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_metadataRandomizeToggle.IsOn)
+            {
+                ApplyRandomizedMetadataFields();
+            }
+            else
+            {
+                _metadataHelperText.Text = "Manual metadata values will be used.";
+            }
+        }
+
+        private void MetadataRandomizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            _metadataRandomizeToggle.IsOn = true;
+            ApplyRandomizedMetadataFields();
+        }
+
+        private void ApplyRandomizedMetadataFields()
+        {
+            _metadataNameBox.Text = GenerateRandomAlias();
+            _metadataNotesBox.Text = $"Randomized note ({DateTime.UtcNow:HH:mm:ss})";
+            var (created, modified) = GenerateRandomizedDates();
+            _metadataCreatedBox.Text = created.ToString("o", CultureInfo.InvariantCulture);
+            _metadataModifiedBox.Text = modified.ToString("o", CultureInfo.InvariantCulture);
+            _metadataHelperText.Text = "Randomized metadata will override file timestamps.";
+        }
+
+        private string GenerateRandomAlias()
+        {
+            byte[] aliasBytes = GenerateRandomBytes(6);
+            return $"meta-{Convert.ToHexString(aliasBytes).ToLowerInvariant()}";
+        }
+
+        private DateTime ParseDateOrDefault(string? input, DateTime fallback)
+        {
+            if (!string.IsNullOrWhiteSpace(input) &&
+                DateTime.TryParse(input, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime parsed))
+            {
+                return parsed;
+            }
+
+            return fallback;
+        }
+
+        private string? GetComboContent(ComboBox comboBox)
+        {
+            if (comboBox.SelectedItem is ComboBoxItem item && item.Content is string text)
+            {
+                return text;
+            }
+
+            return comboBox.SelectedValue as string;
+        }
+
+        private int ParseKeySizeSelection()
+        {
+            string? keySizeText = GetComboContent(_keySizeCombo);
+            if (int.TryParse(keySizeText, out int keySize))
+            {
+                return keySize;
+            }
+
+            return 256;
+        }
         private void ShowPasswordCheckBox_Checked(object sender, RoutedEventArgs e)
         {
             PasswordBox.PasswordRevealMode = PasswordRevealMode.Visible;
@@ -493,6 +754,8 @@ namespace FileLockerWinUI
                     LastWriteTime = File.GetLastWriteTime(filePath),
                     IsSteganographyContainer = useSteganography
                 };
+
+                ApplyMetadataOverrides(metadata, filePath);
 
                 byte[] dataToEncrypt = fileData;
                 if (IsCompressModeEnabled)
@@ -821,6 +1084,11 @@ namespace FileLockerWinUI
                 writer.Write(metadata.IsSteganographyContainer);
                 writer.Write(metadata.ContentHash.Length);
                 writer.Write(metadata.ContentHash);
+                writer.Write(metadata.Algorithm ?? string.Empty);
+                writer.Write(metadata.Mode ?? string.Empty);
+                writer.Write(metadata.KeySizeBits);
+                writer.Write(metadata.CustomNote ?? string.Empty);
+                writer.Write(metadata.MetadataLabel ?? string.Empty);
                 return stream.ToArray();
             }
         }
@@ -853,8 +1121,45 @@ namespace FileLockerWinUI
                     }
                 }
 
+                if (TryReadString(reader, stream, out string algorithm))
+                {
+                    metadata.Algorithm = algorithm;
+                }
+
+                if (TryReadString(reader, stream, out string mode))
+                {
+                    metadata.Mode = mode;
+                }
+
+                if (stream.Position + sizeof(int) <= stream.Length)
+                {
+                    metadata.KeySizeBits = reader.ReadInt32();
+                }
+
+                if (TryReadString(reader, stream, out string note))
+                {
+                    metadata.CustomNote = note;
+                }
+
+                if (TryReadString(reader, stream, out string label))
+                {
+                    metadata.MetadataLabel = label;
+                }
+
                 return metadata;
             }
+        }
+
+        private bool TryReadString(BinaryReader reader, Stream stream, out string value)
+        {
+            if (stream.Position < stream.Length)
+            {
+                value = reader.ReadString();
+                return true;
+            }
+
+            value = string.Empty;
+            return false;
         }
 
         private byte[] GenerateRandomBytes(int size)
@@ -960,6 +1265,11 @@ namespace FileLockerWinUI
             public bool IsCompressed { get; set; }
             public bool IsSteganographyContainer { get; set; }
             public byte[] ContentHash { get; set; } = Array.Empty<byte>();
+            public string Algorithm { get; set; } = string.Empty;
+            public string Mode { get; set; } = string.Empty;
+            public int KeySizeBits { get; set; }
+            public string CustomNote { get; set; } = string.Empty;
+            public string MetadataLabel { get; set; } = string.Empty;
         }
 
         // --- Dialog Helpers ---
