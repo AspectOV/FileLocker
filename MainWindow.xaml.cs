@@ -1,3 +1,4 @@
+using FileLocker;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -16,18 +17,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
-namespace FileLocker
+namespace FileLockerWinUI
 {
-    /// <summary>
-    /// An empty window that can be used on its own or navigated to within a Frame.
-    /// </summary>
+
     public sealed partial class MainWindow : Window
     {
         private const string ENCRYPTED_EXTENSION = ".locked";
@@ -52,17 +50,17 @@ namespace FileLocker
         private XamlRoot _xamlRoot;
 
         // UI element references (resolved after InitializeComponent)
-        private ListView FileListBox { get; }
-        private Button ThemeToggleButton { get; }
-        private TextBlock DropLabel { get; }
-        private TextBlock StatusLabel { get; }
-        private PasswordBox PasswordBox { get; }
-        private ProgressBar PasswordStrengthBar { get; }
-        private TextBlock PasswordStrengthText { get; }
-        private Button EncryptButton { get; }
-        private Button DecryptButton { get; }
-        private Button ClearListButton { get; }
-        private Border DropPanel { get; }
+        private ListView _fileListBox = null!;
+        private Button _themeToggleButton = null!;
+        private TextBlock _dropLabel = null!;
+        private TextBlock _statusLabel = null!;
+        private PasswordBox _passwordBox = null!;
+        private ProgressBar _passwordStrengthBar = null!;
+        private TextBlock _passwordStrengthText = null!;
+        private Button _encryptButton = null!;
+        private Button _decryptButton = null!;
+        private Button _clearListButton = null!;
+        private Border _dropPanel = null!;
 
         // Advanced options properties
         public bool IsCompressModeEnabled { get; set; } = true;
@@ -79,29 +77,62 @@ namespace FileLocker
             InitializeComponent();
             var root = Content as FrameworkElement ?? throw new InvalidOperationException("Window content not loaded.");
 
-            FileListBox = GetElement<ListView>(root, nameof(FileListBox));
-            ThemeToggleButton = GetElement<Button>(root, nameof(ThemeToggleButton));
-            DropLabel = GetElement<TextBlock>(root, nameof(DropLabel));
-            StatusLabel = GetElement<TextBlock>(root, nameof(StatusLabel));
-            PasswordBox = GetElement<PasswordBox>(root, nameof(PasswordBox));
-            PasswordStrengthBar = GetElement<ProgressBar>(root, nameof(PasswordStrengthBar));
-            PasswordStrengthText = GetElement<TextBlock>(root, nameof(PasswordStrengthText));
-            EncryptButton = GetElement<Button>(root, nameof(EncryptButton));
-            DecryptButton = GetElement<Button>(root, nameof(DecryptButton));
-            ClearListButton = GetElement<Button>(root, nameof(ClearListButton));
-            DropPanel = GetElement<Border>(root, nameof(DropPanel));
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+
+            // Set minimum size
+            if (appWindow != null)
+            {
+                // Ensure presenter and optional initial size/icon
+                appWindow.SetPresenter(AppWindowPresenterKind.Default);
+                appWindow.ResizeClient(new SizeInt32(600, 900)); // optional initial size
+                appWindow.SetIcon(null); // ignore if you set an icon elsewhere
+
+                // Enforce a minimum size by listening for size changes and resizing back when smaller.
+                var minSize = new SizeInt32(600, 900);
+                appWindow.Changed += (s, args) =>
+                {
+                    try
+                    {
+                        var sz = s.Size;
+                        int w = Math.Max(sz.Width, minSize.Width);
+                        int h = Math.Max(sz.Height, minSize.Height);
+                        if (w != sz.Width || h != sz.Height)
+                        {
+                            s.Resize(new SizeInt32(w, h));
+                        }
+                    }
+                    catch
+                    {
+                        // Swallow exceptions to avoid crashing the UI thread if resizing fails
+                    }
+                };
+            }
+
+            _fileListBox = GetElement<ListView>(root, nameof(FileListBox));
+            _themeToggleButton = GetElement<Button>(root, nameof(ThemeToggleButton));
+            _dropLabel = GetElement<TextBlock>(root, nameof(DropLabel));
+            _statusLabel = GetElement<TextBlock>(root, nameof(StatusLabel));
+            _passwordBox = GetElement<PasswordBox>(root, nameof(PasswordBox));
+            _passwordStrengthBar = GetElement<ProgressBar>(root, nameof(PasswordStrengthBar));
+            _passwordStrengthText = GetElement<TextBlock>(root, nameof(PasswordStrengthText));
+            _encryptButton = GetElement<Button>(root, nameof(EncryptButton));
+            _decryptButton = GetElement<Button>(root, nameof(DecryptButton));
+            _clearListButton = GetElement<Button>(root, nameof(ClearListButton));
+            _dropPanel = GetElement<Border>(root, nameof(DropPanel));
 
             _xamlRoot = root.XamlRoot;
-            FileListBox.ItemsSource = FileList;
+            _fileListBox.ItemsSource = FileList;
             isDarkTheme = true;
-            ThemeToggleButton.Content = "☀️";
+            _themeToggleButton.Content = "🌙";
             UpdateStatusLabel();
 
             // Set window size to 600x800
             InitializeAppWindow();
 
             // Initialize DropLabel controller using the on-screen label so drag cues stay in sync
-            DropLabelControler = DropLabel;
+            DropLabelControler = _dropLabel;
 
         }
 
@@ -121,12 +152,18 @@ namespace FileLocker
 
         private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
         {
-            if (ThemeToggleButton is Button button)
+            if (_themeToggleButton is Button button)
             {
                 isDarkTheme = !isDarkTheme;
                 button.Content = isDarkTheme ? "🌙" : "☀️";
+
+                if (Content is FrameworkElement root)
+                {
+                    root.RequestedTheme = isDarkTheme ? ElementTheme.Dark : ElementTheme.Light;
+                }
             }
         }
+
 
         // --- Drag & Drop ---
         private void DropPanel_DragOver(object sender, DragEventArgs e)
@@ -258,7 +295,7 @@ namespace FileLocker
         private void SetStatus(string text)
         {
             StatusText = text;
-            StatusLabel.Text = text;
+            _statusLabel.Text = text;
         }
 
         private void UpdateStatusLabel()
@@ -272,10 +309,10 @@ namespace FileLocker
         // --- Password Section ---
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
         {
-            var evaluation = CalculatePasswordStrength(PasswordBox.Password);
-            PasswordStrengthBar.Value = evaluation.Score;
-            PasswordStrengthText.Text = evaluation.Feedback;
-            PasswordStrengthBar.Foreground = new SolidColorBrush(evaluation.BarColor);
+            var evaluation = CalculatePasswordStrength(_passwordBox.Password);
+            _passwordStrengthBar.Value = evaluation.Score;
+            _passwordStrengthText.Text = evaluation.Feedback;
+            _passwordStrengthBar.Foreground = new SolidColorBrush(evaluation.BarColor);
         }
 
         private PasswordStrengthResult CalculatePasswordStrength(string password)
@@ -312,6 +349,13 @@ namespace FileLocker
             }
 
             int finalScore = Math.Clamp(score, 0, 100);
+
+            // New: normalize very strong passwords to 100%
+            if (finalScore >= 90)
+            {
+                finalScore = 100;
+            }
+
             if (finalScore < 35)
             {
                 return new PasswordStrengthResult(finalScore, "Weak - use upper, lower, numbers, and symbols", Microsoft.UI.Colors.Red);
@@ -325,37 +369,56 @@ namespace FileLocker
             return new PasswordStrengthResult(finalScore, "Strong - great mix of length and characters", Microsoft.UI.Colors.Green);
         }
 
+
         // --- Encrypt/Decrypt ---
         private async void EncryptButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!ValidateInput()) return;
+            if (!await ValidateInputAsync()) return;
             await ProcessFilesAsync(true);
         }
 
         private async void DecryptButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!ValidateInput()) return;
+            if (!await ValidateInputAsync()) return;
             await ProcessFilesAsync(false);
         }
 
-        private bool ValidateInput()
+        private async Task<bool> ValidateInputAsync()
         {
             if (selectedPaths.Count == 0)
             {
-                _ = ShowErrorDialogAsync("Please select files or folders to process.");
+                await ShowErrorDialogAsync("Please select files or folders to process.");
                 return false;
             }
-            if (string.IsNullOrWhiteSpace(PasswordBox.Password))
+
+            if (string.IsNullOrWhiteSpace(_passwordBox.Password))
             {
-                _ = ShowErrorDialogAsync("Please enter a password.");
+                await ShowErrorDialogAsync("Please enter a password.");
                 return false;
             }
-            if (PasswordBox.Password.Length < 8)
+
+            if (_passwordBox.Password.Length < 8)
             {
-                _ = ShowConfirmDialogAsync("Password is very weak. Use at least 8 characters with mixed types.", "Weak Password");
-                return false;
+                bool proceed = await ShowConfirmDialogAsync(
+                    "Password is very weak. Use at least 8 characters with mixed types.\n\nContinue anyway?",
+                    "Weak Password");
+
+                if (!proceed)
+                {
+                    return false;
+                }
             }
+
             return true;
+        }
+        private void ShowPasswordCheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+            PasswordBox.PasswordRevealMode = PasswordRevealMode.Visible;
+        }
+
+        private void ShowPasswordCheckBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            PasswordBox.PasswordRevealMode = PasswordRevealMode.Peek;
         }
 
         private async Task ProcessFilesAsync(bool encrypt)
@@ -365,9 +428,9 @@ namespace FileLocker
                 SetUIEnabled(false);
 
                 // Capture password on UI thread before starting background tasks
-                string password = PasswordBox.Password;
+                string password = _passwordBox.Password;
 
-                var allFiles = selectedPaths.ToList();
+                var allFiles = ExpandPathsToFiles(selectedPaths);
                 int processed = 0;
 
                 foreach (string filePath in allFiles)
@@ -872,11 +935,11 @@ namespace FileLocker
 
         private void SetUIEnabled(bool enabled)
         {
-            EncryptButton.IsEnabled = enabled;
-            DecryptButton.IsEnabled = enabled;
-            PasswordBox.IsEnabled = enabled;
-            ClearListButton.IsEnabled = enabled;
-            DropPanel.AllowDrop = enabled;
+            _encryptButton.IsEnabled = enabled;
+            _decryptButton.IsEnabled = enabled;
+            _passwordBox.IsEnabled = enabled;
+            _clearListButton.IsEnabled = enabled;
+            _dropPanel.AllowDrop = enabled;
         }
 
         private void AnimateDropPanel(bool highlight)
@@ -885,7 +948,7 @@ namespace FileLocker
             var color = highlight ?
                 new SolidColorBrush(Microsoft.UI.Colors.LightGreen) :
                 new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            DropPanel.Background = color;
+            _dropPanel.Background = color;
         }
 
         private class FileMetadata
@@ -1025,12 +1088,37 @@ namespace FileLocker
                 IsSteganographyEnabled = toggleSwitch.IsOn;
             }
         }
-        // Add this method to the MainWindow class to fix CS0103
-        private uint ComputeCrc32(byte[] data)
+        private List<string> ExpandPathsToFiles(IEnumerable<string> paths)
         {
-            // Standard CRC32 implementation (IEEE 802.3 polynomial)
+            var allFiles = new List<string>();
+            foreach (var path in paths)
+            {
+                if (File.Exists(path))
+                {
+                    allFiles.Add(path);
+                }
+                else if (Directory.Exists(path))
+                {
+                    try
+                    {
+                        allFiles.AddRange(Directory.GetFiles(path, "*", SearchOption.AllDirectories));
+                    }
+                    catch
+                    {
+                        // Optionally handle access exceptions or log
+                    }
+                }
+            }
+            return allFiles;
+        }
+        // At class level:
+        private static readonly uint[] Crc32Table = CreateCrc32Table();
+
+        private static uint[] CreateCrc32Table()
+        {
             const uint Polynomial = 0xEDB88320u;
-            uint[] table = new uint[256];
+            var table = new uint[256];
+
             for (uint i = 0; i < table.Length; i++)
             {
                 uint crc = i;
@@ -1044,10 +1132,15 @@ namespace FileLocker
                 table[i] = crc;
             }
 
+            return table;
+        }
+
+        private uint ComputeCrc32(byte[] data)
+        {
             uint result = 0xFFFFFFFFu;
             foreach (byte b in data)
             {
-                result = (result >> 8) ^ table[(result ^ b) & 0xFF];
+                result = (result >> 8) ^ Crc32Table[(result ^ b) & 0xFF];
             }
             return ~result;
         }
