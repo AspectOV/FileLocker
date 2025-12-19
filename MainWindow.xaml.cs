@@ -24,7 +24,7 @@ using Windows.Storage.Pickers;
 using WinRT.Interop;
 
 
-namespace FileLockerWinUI
+namespace FileLocker
 {
 
     public sealed partial class MainWindow : Window
@@ -1560,3 +1560,4 @@ namespace FileLockerWinUI
         }
     }
 }
+
