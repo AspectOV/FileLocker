@@ -1,0 +1,38 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build output
+bin/
+obj/
+Debug/
+Release/
+x64/
+x86/
+ARM64/
+
+# Packaging output
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+*.appxsym
+*.msix
+*.msixbundle
+*.msixupload
+
+# NuGet
+packages/
+*.nupkg
+
+# Logs and caches
+*.log
+*.cache
+
+# Local signing material
+*.pfx
+
