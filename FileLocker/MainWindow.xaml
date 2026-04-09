@@ -90,7 +90,14 @@
                                     x:Name="AboutProfilesMenuItem"
                                     IsEnabled="False"
                                     Text="Profiles available" />
+                                <MenuFlyoutItem
+                                    x:Name="AboutUpdateStatusMenuItem"
+                                    IsEnabled="False"
+                                    Text="Updates: automatic checks enabled" />
                                 <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Text="Check for Updates"
+                                    Click="CheckForUpdatesMenuItem_Click" />
                                 <MenuFlyoutItem
                                     Text="Open GitHub"
                                     Click="OpenGitHubMenuItem_Click" />

@@ -17,6 +17,8 @@ ARM64/
 # Packaging output
 AppPackages/
 BundleArtifacts/
+artifacts/
+installer/FileLocker-Setup-*.exe
 *.appx
 *.appxbundle
 *.appxupload
@@ -35,4 +37,3 @@ packages/
 
 # Local signing material
 *.pfx
-

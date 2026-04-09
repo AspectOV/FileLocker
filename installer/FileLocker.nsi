@@ -1,0 +1,145 @@
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
+!include "x64.nsh"
+
+!ifndef APP_NAME
+  !define APP_NAME "FileLocker"
+!endif
+
+!ifndef APP_PUBLISHER
+  !define APP_PUBLISHER "Jeremy Hayes"
+!endif
+
+!ifndef APP_EXE
+  !define APP_EXE "FileLocker.exe"
+!endif
+
+!ifndef APP_VERSION
+  !define APP_VERSION "1.0.4.0"
+!endif
+
+!ifndef APP_FILE_VERSION
+  !define APP_FILE_VERSION "${APP_VERSION}"
+!endif
+
+; Default publish folder:
+; installer\FileLocker.nsi  ->  ..\publish\win-x64
+!ifndef PUBLISH_DIR
+  !define PUBLISH_DIR "..\FileLocker\bin\Release\net8.0-windows10.0.26100.0\win-x64\publish"
+!endif
+
+!ifndef OUTPUT_DIR
+  !define OUTPUT_DIR "."
+!endif
+
+!define APP_ID "FileLocker"
+!define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
+!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
+
+!macro RequirePublishFile RelativePath
+  !if /FileExists "${PUBLISH_DIR}\${RelativePath}"
+    ; required publish file exists
+  !else
+    !error "PUBLISH_DIR is invalid. Missing required file: ${PUBLISH_DIR}\${RelativePath}"
+  !endif
+!macroend
+
+; Fail at compile time if the publish folder is incomplete
+!if /FileExists "${PUBLISH_DIR}\${APP_EXE}"
+  ; publish folder looks valid
+!else
+  !error "PUBLISH_DIR is invalid. Expected to find ${APP_EXE} in: ${PUBLISH_DIR}"
+!endif
+!insertmacro RequirePublishFile "App.xbf"
+!insertmacro RequirePublishFile "MainWindow.xbf"
+!insertmacro RequirePublishFile "FileLocker.pri"
+!insertmacro RequirePublishFile "Themes\Styles.xbf"
+!insertmacro RequirePublishFile "Assets\StoreLogo.png"
+
+Name "${APP_NAME}"
+OutFile "${OUTPUT_DIR}\${APP_NAME}-Setup-${APP_VERSION}.exe"
+InstallDir "${INSTALL_DIR}"
+InstallDirRegKey HKLM "${UNINSTALL_KEY}" "InstallLocation"
+RequestExecutionLevel admin
+Unicode true
+SetCompressor /SOLID lzma
+
+BrandingText "${APP_PUBLISHER}"
+ShowInstDetails show
+ShowUnInstDetails show
+
+VIProductVersion "${APP_FILE_VERSION}"
+VIAddVersionKey "ProductName" "${APP_NAME}"
+VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
+VIAddVersionKey "FileVersion" "${APP_FILE_VERSION}"
+VIAddVersionKey "ProductVersion" "${APP_FILE_VERSION}"
+VIAddVersionKey "FileDescription" "FileLocker Installer"
+VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 Jeremy Hayes"
+
+!define MUI_ABORTWARNING
+
+; Only set custom icons if the .ico file exists
+!if /FileExists "..\FileLocker\Filelocker2.ico"
+  !define MUI_ICON "..\FileLocker\Filelocker2.ico"
+  !define MUI_UNICON "..\FileLocker\Filelocker2.ico"
+!endif
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "English"
+
+Function .onInit
+  ${IfNot} ${RunningX64}
+    MessageBox MB_ICONSTOP|MB_OK "${APP_NAME} is distributed as a 64-bit installer."
+    Abort
+  ${EndIf}
+FunctionEnd
+
+Section "Install"
+  SetRegView 64
+  SetShellVarContext all
+  SetOutPath "$INSTDIR"
+
+  File /r "${PUBLISH_DIR}\*.*"
+
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
+
+  CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+  CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+  CreateShortcut "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk" "$INSTDIR\Uninstall.exe"
+
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher" "${APP_PUBLISHER}"
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${APP_VERSION}"
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE}"
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
+  WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoModify" 1
+  WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
+
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  IntFmt $0 "0x%08X" $0
+  WriteRegDWORD HKLM "${UNINSTALL_KEY}" "EstimatedSize" $0
+SectionEnd
+
+Section "Uninstall"
+  SetRegView 64
+  SetShellVarContext all
+
+  Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+  Delete "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk"
+  RMDir "$SMPROGRAMS\${APP_NAME}"
+
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir /r "$INSTDIR"
+
+  DeleteRegKey HKLM "${UNINSTALL_KEY}"
+SectionEnd

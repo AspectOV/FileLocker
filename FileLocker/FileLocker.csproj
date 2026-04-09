@@ -15,15 +15,18 @@
 		<PublishProfile Condition="'$(PublishProfile)' == ''">win-$(Platform).pubxml</PublishProfile>
 		<UseWinUI>true</UseWinUI>
 		<WinUISDKReferences>false</WinUISDKReferences>
-		<EnableMsixTooling>true</EnableMsixTooling>
 		<Nullable>enable</Nullable>
-		<VersionPrefix>1.0.4</VersionPrefix>
-		<EnableAppInstaller>true</EnableAppInstaller>
+		<Version>1.0.4.0</Version>
+		<VersionPrefix>1.0.4.0</VersionPrefix>
+		<AssemblyVersion>1.0.4.0</AssemblyVersion>
+		<FileVersion>1.0.4.0</FileVersion>
+		<InformationalVersion>1.0.4.0</InformationalVersion>
 		<PublishTrimmed>false</PublishTrimmed>
 		<EnableTrimAnalyzer>false</EnableTrimAnalyzer>
 		<DisableXamlGeneratedNamespaceTrimming>true</DisableXamlGeneratedNamespaceTrimming>
-		<AppInstallerUri>https://downloads.jeremymhayes.com/FileLocker.appinstaller</AppInstallerUri>
-		<HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+		<WindowsPackageType>None</WindowsPackageType>
+		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+		<WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -41,14 +44,6 @@
 		<Manifest Include="$(ApplicationManifest)" />
 	</ItemGroup>
 
-	<!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-	<ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-		<ProjectCapability Include="Msix" />
-	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
 		<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.251106002" />
@@ -57,32 +52,44 @@
 	  <WebView2LoaderPreference>Static</WebView2LoaderPreference>
 	</PropertyGroup>
 
-	<!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-	<PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-		<HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-	</PropertyGroup>
-
 	<!-- Publish Properties -->
 	<PropertyGroup>
 		<PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
 		<PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-		<PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-		<PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
-		<GenerateAppInstallerFile>True</GenerateAppInstallerFile>
-		<AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
-		<PackageCertificateThumbprint>391198BA2329B59EF5C66AB994A0FA739FA85ABF</PackageCertificateThumbprint>
-		<AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
-		<AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
-		<GenerateTestArtifacts>True</GenerateTestArtifacts>
-		<AppxBundle>Always</AppxBundle>
-		<AppxBundlePlatforms>x64</AppxBundlePlatforms>
+		<PublishTrimmed>false</PublishTrimmed>
 		<ApplicationIcon>Filelocker2.ico</ApplicationIcon>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
+
+	<!-- dotnet publish does not automatically carry over the unpackaged WinUI
+	     XAML/PRI payload from the build output, so copy it into the publish folder. -->
+	<Target Name="CopyUnpackagedWinUIResourcesToPublish"
+	        AfterTargets="Publish"
+	        Condition="'$(WindowsPackageType)' == 'None'">
+		<ItemGroup>
+			<_PublishXbfAndPri Include="$(TargetDir)**\*.xbf;$(TargetDir)**\*.pri"
+			                   Exclude="$(TargetDir)AppX\**\*;$(PublishDir)**\*" />
+			<_PublishAssets Include="$(TargetDir)Assets\**\*"
+			                Exclude="$(PublishDir)**\*" />
+			<_PublishThemes Include="$(TargetDir)Themes\**\*"
+			                Exclude="$(PublishDir)**\*" />
+			<_PublishRootSupport Include="$(TargetDir)Filelocker2.ico"
+			                     Condition="Exists('$(TargetDir)Filelocker2.ico')" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(_PublishXbfAndPri)"
+		      DestinationFiles="@(_PublishXbfAndPri->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+		      SkipUnchangedFiles="true" />
+		<Copy SourceFiles="@(_PublishAssets)"
+		      DestinationFiles="@(_PublishAssets->'$(PublishDir)Assets\%(RecursiveDir)%(Filename)%(Extension)')"
+		      SkipUnchangedFiles="true" />
+		<Copy SourceFiles="@(_PublishThemes)"
+		      DestinationFiles="@(_PublishThemes->'$(PublishDir)Themes\%(RecursiveDir)%(Filename)%(Extension)')"
+		      SkipUnchangedFiles="true" />
+		<Copy SourceFiles="@(_PublishRootSupport)"
+		      DestinationFiles="@(_PublishRootSupport->'$(PublishDir)%(Filename)%(Extension)')"
+		      SkipUnchangedFiles="true" />
+	</Target>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
 	  <DebugType>portable</DebugType>
 	</PropertyGroup>

@@ -68,6 +68,11 @@ namespace FileLocker
         private CancellationTokenSource? _processingCancellation;
         private bool _isProcessing;
         private bool _isUiReady;
+        private readonly UpdateSettings _updateSettings = UpdateService.LoadSettings();
+        private string _aboutUpdateStatusText = "Updates: automatic checks enabled";
+        private bool _isCheckingForUpdates;
+        private bool _isDownloadingUpdate;
+        private bool _hasStartedAutomaticUpdateCheck;
 
         // UI element references (resolved after InitializeComponent)
         private  ListView _fileListBox = null!;
@@ -251,6 +256,8 @@ namespace FileLocker
             {
                 // Don’t kill the app if AppWindow APIs aren’t available
             }
+
+            _ = StartAutomaticUpdateCheckAsync();
         }
 
         private void InitializeControlReferences()
@@ -624,6 +631,7 @@ namespace FileLocker
 
             AboutVersionMenuItem.Text = $"Version {version ?? "Unknown"}";
             AboutProfilesMenuItem.Text = $"Profiles available: {profileCount}";
+            AboutUpdateStatusMenuItem.Text = _aboutUpdateStatusText;
         }
 
         private static TElement GetElement<TElement>(FrameworkElement root, string name)
@@ -2690,6 +2698,199 @@ namespace FileLocker
             return result == ContentDialogResult.Primary ? inputBox.Text : null;
         }
 
+        private async Task StartAutomaticUpdateCheckAsync()
+        {
+            if (_hasStartedAutomaticUpdateCheck)
+            {
+                return;
+            }
+
+            _hasStartedAutomaticUpdateCheck = true;
+
+            if (!UpdateService.ShouldPerformAutomaticCheck(_updateSettings, DateTimeOffset.UtcNow))
+            {
+                SetAboutUpdateStatusText("Updates: automatic checks enabled");
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            await CheckForUpdatesAsync(isManualCheck: false);
+        }
+
+        private async Task CheckForUpdatesAsync(bool isManualCheck)
+        {
+            if (_isCheckingForUpdates || _isDownloadingUpdate)
+            {
+                return;
+            }
+
+            try
+            {
+                _isCheckingForUpdates = true;
+                SetAboutUpdateStatusText("Updates: checking...");
+
+                UpdateCheckResult result = await UpdateService.CheckForUpdatesAsync(CancellationToken.None);
+                _updateSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
+                UpdateService.SaveSettings(_updateSettings);
+
+                if (!result.IsUpdateAvailable || result.Release == null)
+                {
+                    _updateSettings.SkippedVersion = null;
+                    UpdateService.SaveSettings(_updateSettings);
+                    SetAboutUpdateStatusText(result.StatusMessage);
+
+                    if (isManualCheck)
+                    {
+                        await ShowInfoDialogAsync(result.StatusMessage, "Updates");
+                    }
+
+                    return;
+                }
+
+                if (string.Equals(_updateSettings.SkippedVersion, result.Release.DisplayVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    SetAboutUpdateStatusText($"Update available: {result.Release.DisplayVersion} (skipped)");
+                    if (!isManualCheck)
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    SetAboutUpdateStatusText($"Update available: {result.Release.DisplayVersion}");
+                }
+
+                await PromptToInstallUpdateAsync(result.Release, isManualCheck);
+            }
+            catch (Exception ex)
+            {
+                SetAboutUpdateStatusText("Updates: check failed");
+                if (isManualCheck)
+                {
+                    await ShowErrorDialogAsync($"Unable to check for updates:\n{ex.Message}");
+                }
+            }
+            finally
+            {
+                _isCheckingForUpdates = false;
+            }
+        }
+
+        private async Task PromptToInstallUpdateAsync(UpdateReleaseInfo release, bool isManualCheck)
+        {
+            var panel = new StackPanel
+            {
+                Spacing = 12,
+                MaxWidth = 520
+            };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"FileLocker {release.DisplayVersion} is available. You are currently running {UpdateService.GetCurrentVersionLabel()}.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            });
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Release notes",
+                FontWeight = FontWeights.SemiBold
+            });
+
+            panel.Children.Add(new ScrollViewer
+            {
+                MaxHeight = 240,
+                Content = new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(release.Notes)
+                        ? "No release notes were provided for this release."
+                        : release.Notes,
+                    IsTextSelectionEnabled = true,
+                    TextWrapping = TextWrapping.WrapWholeWords
+                }
+            });
+
+            var dialog = new ContentDialog
+            {
+                Title = "Update Available",
+                Content = panel,
+                PrimaryButtonText = "Download && Install",
+                SecondaryButtonText = "View Release",
+                CloseButtonText = isManualCheck ? "Not Now" : "Skip This Version",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                await DownloadAndInstallUpdateAsync(release);
+                return;
+            }
+
+            if (result == ContentDialogResult.Secondary)
+            {
+                OpenWithShell(release.HtmlUrl);
+                return;
+            }
+
+            if (!isManualCheck)
+            {
+                _updateSettings.SkippedVersion = release.DisplayVersion;
+                UpdateService.SaveSettings(_updateSettings);
+                SetAboutUpdateStatusText($"Update available: {release.DisplayVersion} (skipped)");
+            }
+        }
+
+        private async Task DownloadAndInstallUpdateAsync(UpdateReleaseInfo release)
+        {
+            try
+            {
+                _isDownloadingUpdate = true;
+                SetAboutUpdateStatusText($"Updates: downloading {release.DisplayVersion}...");
+                SetStatus($"Downloading FileLocker {release.DisplayVersion} update...");
+
+                string installerPath = await UpdateService.DownloadInstallerAsync(release, CancellationToken.None);
+
+                _updateSettings.SkippedVersion = null;
+                UpdateService.SaveSettings(_updateSettings);
+
+                SetAboutUpdateStatusText($"Updates: ready to install {release.DisplayVersion}");
+                SetStatus($"Launching FileLocker {release.DisplayVersion} installer...");
+                LaunchInstallerAndExit(installerPath);
+            }
+            catch (Exception ex)
+            {
+                SetAboutUpdateStatusText("Updates: download failed");
+                await ShowErrorDialogAsync($"Unable to download the update:\n{ex.Message}");
+            }
+            finally
+            {
+                _isDownloadingUpdate = false;
+            }
+        }
+
+        private void LaunchInstallerAndExit(string installerPath)
+        {
+            string escapedInstallerPath = installerPath.Replace("\"", "\"\"", StringComparison.Ordinal);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c timeout /t 2 /nobreak >nul & start \"\" \"{escapedInstallerPath}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            });
+
+            Close();
+        }
+
+        private void SetAboutUpdateStatusText(string text)
+        {
+            _aboutUpdateStatusText = text;
+            AboutUpdateStatusMenuItem.Text = text;
+        }
+
         private async void BrowseKeyfileButton_Click(object sender, RoutedEventArgs e)
         {
             var picker = new FileOpenPicker();
@@ -2893,9 +3094,14 @@ namespace FileLocker
             await Task.CompletedTask;
         }
 
+        private async void CheckForUpdatesMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            await CheckForUpdatesAsync(isManualCheck: true);
+        }
+
         private void OpenGitHubMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            OpenWithShell("https://github.com/AspectOV/FileLocker");
+            OpenWithShell(UpdateService.GitHubRepositoryUrl);
         }
 
         private void OpenReportsFolderMenuItem_Click(object sender, RoutedEventArgs e)
