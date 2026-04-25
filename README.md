@@ -157,7 +157,7 @@ The Help menu can open the installed app folder and updater download cache folde
 1. Clone the repository.
 
 ```powershell
-git clone https://github.com/AspectOV/FileLocker.git
+git clone https://github.com/jeremymhayes/FileLocker.git
 cd FileLocker
 ```
 
