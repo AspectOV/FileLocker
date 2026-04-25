@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/FileLocker-Wordmark.png" alt="FileLocker wordmark" width="750" />
+</p>
+
 # FileLocker
 
 **FileLocker** is a Windows desktop app for encrypting, decrypting, validating, and managing local files with a clean WinUI 3 interface.
