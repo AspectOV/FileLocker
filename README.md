@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/FileLocker_Wordmark.png" alt="FileLocker wordmark" width="1672"/>
+  <img src="assets/FileLocker_Wordmark2.png" alt="FileLocker wordmark" width="1672"/>
 </p>
 
 # FileLocker
