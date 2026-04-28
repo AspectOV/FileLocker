@@ -1,199 +1,141 @@
-<p align="center">
-  <img src="assets/FileLocker_Wordmark2.png" alt="FileLocker wordmark" width="1672"/>
-</p>
-
 # FileLocker
 
-FileLocker is a Windows desktop app for encrypting, decrypting, validating, and managing local files with a WinUI 3 interface.
+FileLocker is a free, local-first Windows desktop security app built with WinUI 3 and the Windows App SDK. It focuses on practical file protection workflows: encrypt files, decrypt FileLocker payloads, generate hashes, manage local history, and run helper security tools without sending files to a cloud service.
 
-It is built for people who want a practical encryption tool that feels approachable without hiding the safety controls that matter.
+Current app version: **1.0.5.2**
 
-Current app version: `1.0.5.2`
+## What FileLocker Does
 
-Latest public release tag: [`v1.0.5.2`](https://github.com/AspectOV/FileLocker/releases/tag/v1.0.5.2)
+- Encrypt files and folders with the current FileLocker payload format.
+- Decrypt supported FileLocker encrypted outputs, including `.locked` files.
+- Generate and verify file hashes with SHA-256 as the recommended default.
+- Track recent local activity when history is enabled.
+- Show dashboard stats for protected files, last operation, security status, and compression impact.
+- Provide helper pages for Encode Text, Metadata Scrambler, and Secure Delete.
+- Keep core file work local to the device.
 
-## Highlights
+## Current App Pages
 
-- Modern WinUI 3 desktop app for Windows 10/11.
-- Drag-and-drop queue for files and folders.
-- AES-GCM and AES-CBC encryption workflows.
-- PBKDF2-SHA256 based key derivation.
-- Beginner, Intermediate, and Advanced experience modes.
-- Built-in profiles for safer defaults.
-- Optional keyfile support.
-- Verification, backup, and cleanup controls.
-- Custom encrypt output destinations.
-- Markdown and CSV report export.
-- NSIS installer distribution.
-- Automatic update checks through GitHub Releases.
-- Help menu shortcuts for the installed app folder and updater download cache.
+The main app shell currently includes:
 
-## Current Release
+1. Dashboard
+2. Encrypt Files
+3. Decrypt Files
+4. Hash Files
+5. Encode Text
+6. Metadata Scrambler
+7. Secure Delete
+8. Settings
+9. About
 
-### FileLocker 1.0.5.2
+Dashboard is the default startup page for normal launches. Explorer or context-menu launches can still queue files into the existing workflow.
 
-This is a follow-up release focused on updater testing, supportability, and release metadata consistency.
+## Encryption And Decryption
 
-What changed:
+FileLocker uses **AES-256-GCM** as the default and recommended encryption mode. The app is designed around authenticated encryption and the existing FileLocker payload format. Compatibility options may appear in the UI only as disabled or advanced notes unless the underlying format support is implemented safely.
 
-- Added quick Help menu actions to open the installed app folder.
-- Added quick Help menu actions to open the updater download cache folder.
-- Improved update troubleshooting by making install and download locations easier to inspect.
-- Refreshed release metadata and versioning to `1.0.5.2`.
-- Updated documentation to match the current app, installer, and release process.
+Encrypted files use the project-specific `.locked` extension for normal FileLocker outputs. Decrypt Files validates selected encrypted files and handles unsupported files as a safe UI state instead of treating every file as decryptable.
 
-Release asset:
+Important security behavior:
 
-```text
-FileLocker-Setup-1.0.5.2.exe
-sha256: 5d07105c584631b40344fc3f03b6d915efe00f5d800d938511399566ced967bc
-```
+- Passwords are not stored in settings, history, queues, or recent files.
+- Passwords are not logged.
+- FileLocker cannot recover forgotten or incorrect passwords.
+- Wrong passwords and corrupted payloads fail safely.
+- Source files are not deleted unless the matching delete-after-success option is explicitly enabled and the operation succeeds.
 
-## Core Features
+## Compression And Storage Impact
 
-### Encryption and Decryption
+Compression is optional and is measured separately from encryption overhead.
 
-- Encrypt files with AES-GCM or AES-CBC.
-- Decrypt FileLocker payloads back to their original file names and extensions.
-- Optional compression before encryption.
-- Optional filename scrambling.
-- Optional PNG container mode for less obvious encrypted output.
-- Save encrypted output next to source files or to a custom folder.
-
-### Safety and Recovery
-
-- Temporary-file write flow to reduce partial-write risk.
-- Optional post-write verification.
-- Optional backup copy creation before destructive actions.
-- Optional original-file removal after success.
-- Optional secure delete when removing originals.
-- Preflight validation before queued work starts.
-- Failed queue items remain visible and include clearer details.
-
-### Profiles and Key Material
-
-- Built-in security profiles.
-- Save reusable custom profiles.
-- Optional keyfile support in addition to password-based encryption.
-- Password strength feedback in the UI.
-- Built-in help for terms such as Verify Only, Rotate Access, Keyfile, and Recovery key.
-
-### Queue and Reporting
-
-- Drag-and-drop queue.
-- Recursive folder handling.
-- Duplicate skipping.
-- Queue metrics for file count, root selections, and total size.
-- Structured queue item details.
-- Recent job history.
-- Markdown and CSV report export through save pickers.
-
-## Built-In Profiles
-
-| Profile          | Purpose                                                                    |
-| ---------------- | -------------------------------------------------------------------------- |
-| Recommended      | Balanced default with AES-GCM, verification, and non-destructive behavior. |
-| Private Archive  | Better privacy defaults with scrambled names and randomized metadata.      |
-| Fast Local Lock  | Faster local protection with compression disabled.                         |
-| Transfer Copy    | Verified encrypted output with source removal after success.               |
-| Shred After Lock | Aggressive cleanup path with secure delete after success.                  |
-| Stealth PNG      | Wraps encrypted output in a PNG container.                                 |
-
-## Security Notes
-
-FileLocker currently uses:
-
-- AES-GCM.
-- AES-CBC.
-- PBKDF2-SHA256 for key derivation.
-
-Some older internal naming still references Argon2 from earlier experiments, but the current implementation is PBKDF2-SHA256.
-
-## Requirements
-
-### End Users
-
-- Windows 10 or Windows 11.
-- x64 system for the current NSIS installer.
-
-### Development
-
-- Visual Studio 2022 recommended.
-- .NET SDK matching `global.json`.
-
-## Install
-
-The recommended way to install FileLocker is from GitHub Releases.
-
-Download the latest installer asset:
+The Dashboard **Storage Impact** card reports compression savings using:
 
 ```text
-FileLocker-Setup-1.0.5.2.exe
+original input size before compression - compressed payload size before encryption
 ```
 
-Run the installer and launch the app normally from the Start menu.
+This avoids the misleading older behavior of comparing the original file size to the final encrypted output. Encrypted output can be larger because encryption adds metadata and authentication overhead, even when compression helped.
 
-## Automatic Updates
+The UI now reports:
 
-FileLocker checks GitHub Releases for updates.
+- saved space when compression reduced the payload,
+- no savings when compression had no benefit,
+- increased size when compression made the payload larger.
+
+## Hash Files
+
+The Hash Files page is for integrity checks and comparison workflows.
+
+- SHA-256 is the recommended/default algorithm.
+- SHA-512 is available for stronger digest length when supported by the app.
+- Hash output is displayed for copying, saving, and verification.
+- Expected hash comparison normalizes common whitespace/case issues before reporting match or mismatch.
+
+Hashing is not encryption. It verifies integrity; it does not hide file contents.
+
+## Settings And Privacy
+
+Settings are grouped around appearance, security, file handling, privacy, updates, and about/support details.
+
+Local-first behavior:
+
+- File operations run on the local machine.
+- Activity history is local and can be disabled or cleared.
+- Update checks contact GitHub Releases, but file contents are not uploaded.
+- Temporary/update files are stored under the user's local app data folder, not beside the installed executable.
+
+## Updates
+
+FileLocker uses GitHub Releases for update checks.
 
 The updater expects:
 
-- a published GitHub Release on `AspectOV/FileLocker`;
-- a release tag like `v1.0.5.2`;
-- an uploaded installer asset named `FileLocker-Setup-1.0.5.2.exe`.
+- a release on `jeremymhayes/FileLocker`,
+- a version tag such as `v1.0.5.2`,
+- an installer asset named like `FileLocker-Setup-1.0.5.2.exe`.
 
-When a newer release is found, the app can:
+The app is not currently code signed. That means Windows may show SmartScreen or publisher warnings for installers. The updater still supports the unsigned installer flow by validating release/download information and installer digest data where available, instead of requiring an Authenticode signature before a user can update.
 
-- show the release notes;
-- download the installer;
-- verify the published SHA-256 digest when GitHub provides one;
-- close FileLocker and launch the new installer.
+Manual update checks are available from the app's help/update controls.
 
-The Help menu can open the installed app folder and updater download cache folder so you can confirm the installed build and inspect the downloaded installer.
+## Install
+
+The recommended public install path is the NSIS installer from GitHub Releases:
+
+```text
+FileLocker-Setup-<version>.exe
+```
+
+Run the installer normally. On unsigned builds, Windows may ask for extra confirmation.
 
 ## Build From Source
 
-1. Clone the repository.
+### Requirements
 
-```powershell
-git clone https://github.com/jeremymhayes/FileLocker.git
-cd FileLocker
-```
+- Windows 10 or Windows 11
+- .NET SDK matching `global.json`
+- Visual Studio 2022 recommended for WinUI development
+- NSIS for installer builds, or `makensis.exe` available on PATH
 
-2. Build the app.
+### Build the app
 
 ```powershell
 dotnet build .\FileLocker\FileLocker.csproj -c Release
 ```
 
-3. Publish the unpackaged app.
+### Run tests
 
 ```powershell
-dotnet publish .\FileLocker\FileLocker.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=false /p:PublishTrimmed=false
+dotnet test .\FileLocker.Tests\FileLocker.Tests.csproj
 ```
 
-4. Build the NSIS installer.
+### Build the NSIS installer
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Build-Installer.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-Installer.ps1 -Configuration Release
 ```
 
-Installer output:
-
-```text
-artifacts\nsis\FileLocker-Setup-1.0.5.2.exe
-```
-
-## Release Workflow
-
-For a new public release:
-
-1. Update the version values in `FileLocker.csproj`.
-2. Build a fresh installer with `Build-Installer.ps1`.
-3. Create a GitHub Release with a matching tag such as `v1.0.5.2`.
-4. Upload the generated installer asset, such as `FileLocker-Setup-1.0.5.2.exe`.
-5. Confirm the updater can read the tag and installer asset from the release.
+The installer workflow stages a fresh unpackaged WinUI publish output before NSIS packages it.
 
 ## Project Layout
 
@@ -204,34 +146,41 @@ FileLocker/
 ├── global.json
 ├── installer/
 ├── scripts/
-└── FileLocker/
-    ├── App.xaml
-    ├── App.xaml.cs
-    ├── MainWindow.xaml
-    ├── MainWindow.xaml.cs
-    ├── UpdateService.cs
-    ├── FileLocker.csproj
-    ├── app.manifest
-    ├── Assets/
-    ├── Themes/
-    └── Properties/
+├── artifacts/
+├── FileLocker/
+└── FileLocker.Tests/
 ```
 
-## Notes
+Key files:
 
-- Legacy MSIX/AppInstaller files are still present in the repository for reference, but the current distribution path is unpackaged plus NSIS.
-- App data is stored under the user profile, not beside the installed executable.
-- Reports are exported through a save picker so the user chooses the destination.
-- The advanced warning banner can be dismissed and restored.
-- Custom encrypt output selection is intended to make batch workflows more flexible without changing the default same-folder behavior.
+- `FileLocker/FileLocker.csproj`
+- `FileLocker/MainWindow.xaml`
+- `FileLocker/MainWindow.Navigation.cs`
+- `FileLocker/MainWindow.EncryptFiles.cs`
+- `FileLocker/MainWindow.DecryptFiles.cs`
+- `FileLocker/MainWindow.HashFiles.cs`
+- `FileLocker/MainWindow.Workflows.cs`
+- `FileLocker/OperationHistoryModels.cs`
+- `FileLocker/UpdateService.cs`
+- `installer/FileLocker.nsi`
+- `scripts/Build-Installer.ps1`
 
-## Repository Files
+## Current Distribution Model
 
-- `FileLocker.csproj`
-- `FileLocker.nsi`
-- `Build-Installer.ps1`
-- `FEATURE_IMPROVEMENTS.md`
+FileLocker is currently distributed as an **unpackaged WinUI app with an NSIS installer**.
 
-## Summary
+Legacy MSIX/AppInstaller files may still exist in the repo, but the active release path is NSIS plus GitHub Releases. Generated installer binaries should not be committed to source control.
 
-FileLocker is a Windows-focused file protection app with guided workflows, reusable profiles, safer output handling, report export, NSIS-based distribution, and GitHub Releases update support through the current `1.0.5.2` release.
+## Security Notes
+
+FileLocker is a local file security tool, not a password recovery product.
+
+- Keep encryption passwords somewhere safe.
+- Test decrypting important files before deleting originals.
+- Keep backups for critical data.
+- Do not assume compression will always reduce file size.
+- Treat Secure Delete and delete-after-success options as destructive.
+
+## License
+
+See the repository license file or the in-app About page for license details.
