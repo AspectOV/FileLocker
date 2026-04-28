@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/FileLocker_Wordmark2.png" alt="FileLocker wordmark" width="1672"/>
+</p>
+
 # FileLocker
 
 FileLocker is a free, local-first Windows desktop security app built with WinUI 3 and the Windows App SDK. It focuses on practical file protection workflows: encrypt files, decrypt FileLocker payloads, generate hashes, manage local history, and run helper security tools without sending files to a cloud service.
